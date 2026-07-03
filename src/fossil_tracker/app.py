@@ -2,19 +2,26 @@
 
 from __future__ import annotations
 
+import re
 import tempfile
 from pathlib import Path
 
 import streamlit as st
 
-from fossil_tracker.config import APP_NAME, database_path
+from fossil_tracker.config import APP_NAME, DEFAULT_IMAGE_DIR, PROJECT_ROOT, database_path
 from fossil_tracker.db import (
     SPECIMEN_FIELDS,
     apply_migrations,
+    create_observation,
+    create_specimen_image,
     create_specimen,
+    delete_observation,
+    delete_specimen_image,
     delete_specimen,
     export_csv,
     get_specimen,
+    list_observations,
+    list_specimen_images,
     list_specimens,
     seed_specimens,
     update_specimen,
@@ -31,6 +38,8 @@ PREPARATION_OPTIONS = [
     "Prepared",
     "Cast",
 ]
+IMAGE_TYPE_OPTIONS = ["", "Overall", "Close-up", "Matrix", "Label", "Comparison", "Other"]
+OBSERVATION_TYPE_OPTIONS = ["", "General", "Morphology", "Condition", "Measurement", "Research note", "Other"]
 
 
 def main() -> None:
@@ -74,7 +83,9 @@ def main() -> None:
         )
         export_path.unlink(missing_ok=True)
 
-    tab_register, tab_add, tab_edit = st.tabs(["Register", "Add specimen", "Edit specimen"])
+    tab_register, tab_add, tab_edit, tab_notes = st.tabs(
+        ["Register", "Add specimen", "Edit specimen", "Images and notes"]
+    )
 
     with tab_register:
         show_register(db_path)
@@ -84,6 +95,9 @@ def main() -> None:
 
     with tab_edit:
         show_edit_form(db_path)
+
+    with tab_notes:
+        show_images_and_notes(db_path)
 
 
 def show_register(db_path: Path) -> None:
@@ -124,9 +138,8 @@ def show_register(db_path: Path) -> None:
             if specimen["field_notes_links"]:
                 st.markdown("**Field Notes links**")
                 st.write(specimen["field_notes_links"])
-            if specimen["image_paths"]:
-                st.markdown("**Image paths**")
-                st.write(specimen["image_paths"])
+            render_specimen_images(specimen["id"], db_path)
+            render_specimen_observations(specimen["id"], db_path)
 
 
 def show_add_form(db_path: Path) -> None:
@@ -170,6 +183,150 @@ def show_edit_form(db_path: Path) -> None:
     if remove:
         delete_specimen(specimen["id"], db_path)
         st.warning("Specimen deleted.")
+
+
+def show_images_and_notes(db_path: Path) -> None:
+    specimens = list_specimens(db_path)
+    if not specimens:
+        st.info("Add a specimen before attaching images or notes.")
+        return
+
+    choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
+    selected_label = st.selectbox("Specimen", list(choices), key="media-specimen")
+    specimen = get_specimen(choices[selected_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
+
+    st.subheader("Images")
+    render_specimen_images(specimen["id"], db_path, allow_delete=True)
+    with st.form("add-image", clear_on_submit=True):
+        uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
+        image_path = st.text_input("Image path")
+        image_meta = st.columns([1, 1, 1, 1])
+        image_type = image_meta[0].selectbox("Image type", IMAGE_TYPE_OPTIONS)
+        caption = image_meta[1].text_input("Caption")
+        photographer = image_meta[2].text_input("Photographer")
+        date_taken = image_meta[3].text_input("Date taken")
+        licence = st.text_input("Licence")
+        image_notes = st.text_area("Image notes")
+        add_image = st.form_submit_button("Add image")
+
+    if add_image:
+        stored_path = image_path.strip()
+        if uploaded is not None:
+            stored_path = save_uploaded_image(uploaded, specimen)
+        if not stored_path:
+            st.error("Upload an image or enter an image path.")
+            return
+        create_specimen_image(
+            {
+                "specimen_id": specimen["id"],
+                "image_path": stored_path,
+                "image_type": image_type,
+                "caption": caption,
+                "photographer": photographer,
+                "licence": licence,
+                "date_taken": date_taken,
+                "notes": image_notes,
+            },
+            db_path,
+        )
+        st.success("Image added.")
+        st.rerun()
+
+    st.subheader("Observation notes")
+    render_specimen_observations(specimen["id"], db_path, allow_delete=True)
+    with st.form("add-observation", clear_on_submit=True):
+        observation_meta = st.columns([1, 1, 1])
+        observation_date = observation_meta[0].text_input("Observation date")
+        observation_type = observation_meta[1].selectbox(
+            "Observation type", OBSERVATION_TYPE_OPTIONS
+        )
+        related_project = observation_meta[2].text_input("Related project")
+        related_url = st.text_input("Related URL")
+        notes = st.text_area("Notes", height=180)
+        add_observation = st.form_submit_button("Add observation")
+
+    if add_observation:
+        if not notes.strip():
+            st.error("Observation notes are required.")
+            return
+        create_observation(
+            {
+                "specimen_id": specimen["id"],
+                "observation_date": observation_date,
+                "observation_type": observation_type,
+                "notes": notes,
+                "related_project": related_project,
+                "related_url": related_url,
+            },
+            db_path,
+        )
+        st.success("Observation added.")
+        st.rerun()
+
+
+def render_specimen_images(
+    specimen_id: int, db_path: Path, allow_delete: bool = False
+) -> None:
+    images = list_specimen_images(specimen_id, db_path)
+    if not images:
+        if allow_delete:
+            st.info("No images recorded for this specimen.")
+        return
+
+    st.markdown("**Images**")
+    columns = st.columns(3)
+    for index, image in enumerate(images):
+        with columns[index % 3]:
+            path = resolve_image_path(image["image_path"])
+            if path.exists():
+                st.image(str(path), caption=image["caption"] or image["image_type"] or None)
+            else:
+                st.code(image["image_path"], language=None)
+                if image["caption"]:
+                    st.caption(image["caption"])
+            details = image_details(image)
+            if details:
+                st.caption(details)
+            if image["notes"]:
+                st.markdown(image["notes"])
+            if allow_delete and st.button("Delete image", key=f"delete-image-{image['id']}"):
+                delete_specimen_image(image["id"], db_path)
+                st.warning("Image deleted.")
+                st.rerun()
+
+
+def render_specimen_observations(
+    specimen_id: int, db_path: Path, allow_delete: bool = False
+) -> None:
+    observations = list_observations(specimen_id, db_path)
+    if not observations:
+        if allow_delete:
+            st.info("No observation notes recorded for this specimen.")
+        return
+
+    st.markdown("**Observation notes**")
+    for observation in observations:
+        heading = observation["observation_type"] or "Observation"
+        if observation["observation_date"]:
+            heading = f"{heading} - {observation['observation_date']}"
+        with st.expander(heading, expanded=allow_delete):
+            st.markdown(observation["notes"])
+            links = []
+            if observation["related_project"]:
+                links.append(observation["related_project"])
+            if observation["related_url"]:
+                links.append(observation["related_url"])
+            if links:
+                st.caption(" | ".join(links))
+            if allow_delete and st.button(
+                "Delete observation", key=f"delete-observation-{observation['id']}"
+            ):
+                delete_observation(observation["id"], db_path)
+                st.warning("Observation deleted.")
+                st.rerun()
 
 
 def specimen_inputs(prefix: str, specimen: dict | None = None) -> dict:
@@ -255,12 +412,58 @@ def specimen_inputs(prefix: str, specimen: dict | None = None) -> dict:
     )
     values["public_notes"] = st.text_area("Public notes", value=data.get("public_notes", ""), key=f"{prefix}-public")
     values["private_notes"] = st.text_area("Private notes", value=data.get("private_notes", ""), key=f"{prefix}-private")
-    values["image_paths"] = st.text_area("Image paths", value=data.get("image_paths", ""), key=f"{prefix}-images")
     values["field_notes_links"] = st.text_area(
         "Field Notes links", value=data.get("field_notes_links", ""), key=f"{prefix}-links"
     )
 
     return {field: values.get(field, "") for field in SPECIMEN_FIELDS}
+
+
+def save_uploaded_image(uploaded_file, specimen: dict) -> str:
+    """Save an uploaded Streamlit file and return a project-relative path."""
+
+    DEFAULT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    collection_code = safe_filename(str(specimen["collection_code"]))
+    original_name = safe_filename(uploaded_file.name)
+    destination = unique_path(DEFAULT_IMAGE_DIR / f"{collection_code}_{original_name}")
+    destination.write_bytes(uploaded_file.getbuffer())
+    return str(destination.relative_to(PROJECT_ROOT))
+
+
+def safe_filename(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
+    cleaned = cleaned.strip(".-")
+    return cleaned or "image"
+
+
+def unique_path(path: Path) -> Path:
+    if not path.exists():
+        return path
+
+    stem = path.stem
+    suffix = path.suffix
+    for counter in range(1, 1000):
+        candidate = path.with_name(f"{stem}-{counter}{suffix}")
+        if not candidate.exists():
+            return candidate
+    raise RuntimeError("Could not create a unique image filename.")
+
+
+def resolve_image_path(image_path: str) -> Path:
+    path = Path(image_path).expanduser()
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
+def image_details(image: dict) -> str:
+    parts = [
+        image["image_type"],
+        image["photographer"],
+        image["date_taken"],
+        image["licence"],
+    ]
+    return " | ".join(str(part) for part in parts if part)
 
 
 def _blank(value: object) -> str:

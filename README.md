@@ -40,6 +40,16 @@ The application is built using:
 - Streamlit
 - Datasette
 
+## Current Features
+
+- Core specimen register with provenance and ethics fields
+- Multiple image records per specimen
+- Uploaded image storage under _data/images_
+- Markdown-friendly observation notes
+- Basic per-specimen image gallery
+- SQLite browsing through Datasette
+- CSV import and export for specimen records
+
 ## Planned Features
 
 ### Specimen Catalogue
@@ -133,7 +143,7 @@ Run the setup script to create a Python virtual environment and install the proj
 Create the SQLite database and apply all outstanding database migrations.
 
 ```bash
-venv/bin/fossil-tracker init-db
+fossil-tracker init-db
 ```
 
 By default, the application stores its database at:

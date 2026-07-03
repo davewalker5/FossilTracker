@@ -31,10 +31,29 @@ SPECIMEN_FIELDS = [
     "measurements",
     "preparation_type",
     "storage_location",
-    "image_paths",
     "field_notes_links",
     "public_notes",
     "private_notes",
+]
+
+IMAGE_FIELDS = [
+    "specimen_id",
+    "image_path",
+    "image_type",
+    "caption",
+    "photographer",
+    "licence",
+    "date_taken",
+    "notes",
+]
+
+OBSERVATION_FIELDS = [
+    "specimen_id",
+    "observation_date",
+    "observation_type",
+    "notes",
+    "related_project",
+    "related_url",
 ]
 
 
@@ -136,6 +155,7 @@ def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
+    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
     payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["created_at"] = now
     payload["updated_at"] = now
@@ -155,6 +175,7 @@ def update_specimen(specimen_id: int, values: dict[str, Any], db_path: Path | No
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
+    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
     payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["updated_at"] = now
     assignments = ", ".join([f"{field} = ?" for field in [*SPECIMEN_FIELDS, "updated_at"]])
@@ -172,6 +193,138 @@ def delete_specimen(specimen_id: int, db_path: Path | None = None) -> None:
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimens WHERE id = ?", (specimen_id,))
+        connection.commit()
+
+
+def list_specimen_images(
+    specimen_id: int, db_path: Path | None = None
+) -> list[sqlite3.Row]:
+    """List images for one specimen."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM specimen_images
+                WHERE specimen_id = ?
+                ORDER BY date_taken DESC, created_at DESC, id DESC
+                """,
+                (specimen_id,),
+            )
+        )
+
+
+def create_specimen_image(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create an image record and return its id."""
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    payload = {field: values.get(field) for field in IMAGE_FIELDS}
+    payload["created_at"] = now
+    payload["updated_at"] = now
+    fields = [*IMAGE_FIELDS, "created_at", "updated_at"]
+
+    with connect(db_path) as connection:
+        cursor = connection.execute(
+            f"""
+            INSERT INTO specimen_images ({', '.join(fields)})
+            VALUES ({', '.join(['?'] * len(fields))})
+            """,
+            [payload[field] for field in fields],
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+
+
+def update_specimen_image(
+    image_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update an image record."""
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    payload = {field: values.get(field) for field in IMAGE_FIELDS}
+    assignments = ", ".join([f"{field} = ?" for field in [*IMAGE_FIELDS, "updated_at"]])
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE specimen_images SET {assignments} WHERE id = ?",
+            [payload[field] for field in IMAGE_FIELDS] + [now, image_id],
+        )
+        connection.commit()
+
+
+def delete_specimen_image(image_id: int, db_path: Path | None = None) -> None:
+    """Delete one image record."""
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM specimen_images WHERE id = ?", (image_id,))
+        connection.commit()
+
+
+def list_observations(
+    specimen_id: int, db_path: Path | None = None
+) -> list[sqlite3.Row]:
+    """List observations for one specimen."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM observations
+                WHERE specimen_id = ?
+                ORDER BY observation_date DESC, created_at DESC, id DESC
+                """,
+                (specimen_id,),
+            )
+        )
+
+
+def create_observation(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create an observation record and return its id."""
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
+    payload["created_at"] = now
+    payload["updated_at"] = now
+    fields = [*OBSERVATION_FIELDS, "created_at", "updated_at"]
+
+    with connect(db_path) as connection:
+        cursor = connection.execute(
+            f"""
+            INSERT INTO observations ({', '.join(fields)})
+            VALUES ({', '.join(['?'] * len(fields))})
+            """,
+            [payload[field] for field in fields],
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+
+
+def update_observation(
+    observation_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update an observation record."""
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
+    assignments = ", ".join(
+        [f"{field} = ?" for field in [*OBSERVATION_FIELDS, "updated_at"]]
+    )
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE observations SET {assignments} WHERE id = ?",
+            [payload[field] for field in OBSERVATION_FIELDS] + [now, observation_id],
+        )
+        connection.commit()
+
+
+def delete_observation(observation_id: int, db_path: Path | None = None) -> None:
+    """Delete one observation record."""
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM observations WHERE id = ?", (observation_id,))
         connection.commit()
 
 

@@ -62,6 +62,8 @@ SOURCE_TYPE_OPTIONS = ["", "Seller", "Collector", "Gift", "Field collection", "A
 
 
 def main() -> None:
+    """Run the Streamlit application."""
+
     st.set_page_config(page_title=APP_NAME, layout="wide")
     st.title(APP_NAME)
     st.caption("Personal fossil collection register")
@@ -81,6 +83,7 @@ def main() -> None:
             st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
         csv_file = st.file_uploader("Import CSV", type=["csv"])
         if csv_file is not None and st.button("Import uploaded CSV", use_container_width=True):
+            # Streamlit uploads are in memory, while the importer expects a filesystem path.
             with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as handle:
                 handle.write(csv_file.getbuffer())
                 temp_path = Path(handle.name)
@@ -126,6 +129,11 @@ def main() -> None:
 
 
 def show_register(db_path: Path) -> None:
+    """Render the searchable specimen register.
+
+    :param db_path: SQLite database path.
+    """
+
     controls = st.columns([2, 1, 1])
     search = controls[0].text_input("Search", placeholder="Collection code, taxon, locality, source")
     confidence = controls[1].selectbox("Ethical confidence", ["All", *CONFIDENCE_OPTIONS])
@@ -175,6 +183,11 @@ def show_register(db_path: Path) -> None:
 
 
 def show_add_form(db_path: Path) -> None:
+    """Render the add-specimen form.
+
+    :param db_path: SQLite database path.
+    """
+
     with st.form("add-specimen", clear_on_submit=True):
         values = specimen_inputs("new", db_path=db_path)
         submitted = st.form_submit_button("Add specimen")
@@ -187,6 +200,11 @@ def show_add_form(db_path: Path) -> None:
 
 
 def show_edit_form(db_path: Path) -> None:
+    """Render the edit/delete specimen form.
+
+    :param db_path: SQLite database path.
+    """
+
     specimens = list_specimens(db_path)
     if not specimens:
         st.info("Add a specimen before editing.")
@@ -218,6 +236,11 @@ def show_edit_form(db_path: Path) -> None:
 
 
 def show_context_manager(db_path: Path) -> None:
+    """Render taxonomy, locality, age, and preparation reference forms.
+
+    :param db_path: SQLite database path.
+    """
+
     taxonomy_tab, ages_tab, localities_tab, preparation_tab = st.tabs(
         ["Taxonomy", "Geological ages", "Localities", "Preparation types"]
     )
@@ -337,6 +360,11 @@ def show_context_manager(db_path: Path) -> None:
 
 
 def show_provenance_manager(db_path: Path) -> None:
+    """Render acquisition and acquisition-document management forms.
+
+    :param db_path: SQLite database path.
+    """
+
     acquisitions = list_acquisitions(db_path)
     st.subheader("Acquisitions")
     render_reference_list([acquisition_label(row) for row in acquisitions])
@@ -409,6 +437,11 @@ def show_provenance_manager(db_path: Path) -> None:
 
 
 def show_images_and_notes(db_path: Path) -> None:
+    """Render image and observation management for a specimen.
+
+    :param db_path: SQLite database path.
+    """
+
     specimens = list_specimens(db_path)
     if not specimens:
         st.info("Add a specimen before attaching images or notes.")
@@ -491,6 +524,12 @@ def show_images_and_notes(db_path: Path) -> None:
 
 
 def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
+    """Render documents linked to one acquisition.
+
+    :param acquisition_id: Acquisition primary key.
+    :param db_path: SQLite database path.
+    """
+
     documents = list_acquisition_documents(acquisition_id, db_path)
     if not documents:
         st.info("No acquisition documents recorded.")
@@ -512,6 +551,13 @@ def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
 def render_specimen_images(
     specimen_id: int, db_path: Path, allow_delete: bool = False
 ) -> None:
+    """Render images linked to one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: SQLite database path.
+    :param allow_delete: Whether delete buttons should be shown.
+    """
+
     images = list_specimen_images(specimen_id, db_path)
     if not images:
         if allow_delete:
@@ -543,6 +589,13 @@ def render_specimen_images(
 def render_specimen_observations(
     specimen_id: int, db_path: Path, allow_delete: bool = False
 ) -> None:
+    """Render observation notes linked to one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: SQLite database path.
+    :param allow_delete: Whether delete buttons should be shown.
+    """
+
     observations = list_observations(specimen_id, db_path)
     if not observations:
         if allow_delete:
@@ -572,6 +625,14 @@ def render_specimen_observations(
 
 
 def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | None = None) -> dict:
+    """Render shared specimen input controls.
+
+    :param prefix: Stable key prefix for Streamlit widgets.
+    :param specimen: Existing specimen values for edit mode.
+    :param db_path: Optional SQLite database path.
+    :return: Values keyed by specimen field name.
+    """
+
     data = dict(specimen or {})
     values: dict[str, object] = {}
 
@@ -657,7 +718,12 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
 
 
 def save_uploaded_image(uploaded_file, specimen: dict) -> str:
-    """Save an uploaded Streamlit file and return its stored path."""
+    """Save an uploaded Streamlit file and return its stored path.
+
+    :param uploaded_file: Streamlit uploaded file object.
+    :param specimen: Specimen row used for the filename prefix.
+    :return: Project-relative path when possible, otherwise absolute path.
+    """
 
     storage_dir = image_dir()
     storage_dir.mkdir(parents=True, exist_ok=True)
@@ -666,18 +732,31 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
     destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
     destination.write_bytes(uploaded_file.getbuffer())
     try:
+        # Keep default project-local uploads portable in CSV exports and Datasette views.
         return str(destination.relative_to(PROJECT_ROOT))
     except ValueError:
         return str(destination)
 
 
 def safe_filename(value: str) -> str:
+    """Convert a display value into a filesystem-safe filename segment.
+
+    :param value: Raw filename or label.
+    :return: Safe filename segment.
+    """
+
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
     cleaned = cleaned.strip(".-")
     return cleaned or "image"
 
 
 def unique_path(path: Path) -> Path:
+    """Return a non-existing path by adding a numeric suffix when needed.
+
+    :param path: Preferred filesystem path.
+    :return: Available filesystem path.
+    """
+
     if not path.exists():
         return path
 
@@ -691,6 +770,12 @@ def unique_path(path: Path) -> Path:
 
 
 def resolve_image_path(image_path: str) -> Path:
+    """Resolve a stored image path for display.
+
+    :param image_path: Stored relative or absolute image path.
+    :return: Absolute image path.
+    """
+
     path = Path(image_path).expanduser()
     if path.is_absolute():
         return path
@@ -698,6 +783,12 @@ def resolve_image_path(image_path: str) -> Path:
 
 
 def image_details(image: dict) -> str:
+    """Build a compact image metadata label.
+
+    :param image: Image row.
+    :return: Human-readable metadata string.
+    """
+
     parts = [
         image["image_type"],
         image["photographer"],
@@ -708,6 +799,11 @@ def image_details(image: dict) -> str:
 
 
 def render_reference_list(labels: list[str]) -> None:
+    """Render a compact list of reference labels.
+
+    :param labels: Labels to display.
+    """
+
     if not labels:
         st.info("No records yet.")
         return
@@ -718,10 +814,23 @@ def render_reference_list(labels: list[str]) -> None:
 
 
 def record_ids(records: list[dict]) -> list[int | None]:
+    """Return selectbox option ids with an initial blank option.
+
+    :param records: Rows containing id values.
+    :return: List of ids prefixed with None.
+    """
+
     return [None, *[record["id"] for record in records]]
 
 
 def record_index(records: list[dict], current_id: object) -> int:
+    """Return the selectbox index for a current record id.
+
+    :param records: Rows containing id values.
+    :param current_id: Currently selected id.
+    :return: Selectbox index.
+    """
+
     if current_id in {None, ""}:
         return 0
     ids = [record["id"] for record in records]
@@ -732,6 +841,14 @@ def record_index(records: list[dict], current_id: object) -> int:
 
 
 def record_option_label(value: int | None, records: list[dict], label_func) -> str:
+    """Render one selectbox option label.
+
+    :param value: Selected option id.
+    :param records: Rows containing id values.
+    :param label_func: Function that renders a row label.
+    :return: Display label for the option.
+    """
+
     if value is None:
         return "Not recorded"
     for record in records:
@@ -741,6 +858,12 @@ def record_option_label(value: int | None, records: list[dict], label_func) -> s
 
 
 def taxonomy_label(taxon: dict | None) -> str:
+    """Build a display label for a taxonomy row.
+
+    :param taxon: Taxonomy row or None.
+    :return: Display label.
+    """
+
     if not taxon:
         return ""
     scientific_name = " ".join(
@@ -765,6 +888,12 @@ def taxonomy_label(taxon: dict | None) -> str:
 
 
 def locality_label(locality: dict | None) -> str:
+    """Build a display label for a locality row.
+
+    :param locality: Locality row or None.
+    :return: Display label.
+    """
+
     if not locality:
         return ""
     place = ", ".join(
@@ -781,6 +910,12 @@ def locality_label(locality: dict | None) -> str:
 
 
 def geological_age_label(age: dict | None) -> str:
+    """Build a display label for a geological age row.
+
+    :param age: Geological age row or None.
+    :return: Display label.
+    """
+
     if not age:
         return ""
     parts = [age["era"], age["period"], age["epoch"], age["stage"]]
@@ -792,6 +927,12 @@ def geological_age_label(age: dict | None) -> str:
 
 
 def acquisition_label(acquisition: dict | None) -> str:
+    """Build a display label for an acquisition row.
+
+    :param acquisition: Acquisition row or None.
+    :return: Display label.
+    """
+
     if not acquisition:
         return ""
     parts = [
@@ -807,6 +948,12 @@ def acquisition_label(acquisition: dict | None) -> str:
 
 
 def _blank(value: object) -> str:
+    """Render empty values consistently in the UI.
+
+    :param value: Value to render.
+    :return: String value or "Not recorded".
+    """
+
     return str(value) if value else "Not recorded"
 
 

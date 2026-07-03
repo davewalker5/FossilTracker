@@ -17,14 +17,8 @@ CREATE TABLE specimens (
     taxon_id INTEGER,
     geological_age_id INTEGER,
     locality_id INTEGER,
-    acquisition_date TEXT,
-    source TEXT,
-    purchase_price TEXT,
-    currency TEXT,
-    provenance_notes TEXT,
-    legality_ethics_notes TEXT,
-    ethical_confidence TEXT NOT NULL DEFAULT 'Unknown',
-    documentation_available INTEGER NOT NULL DEFAULT 0,
+    acquisition_id INTEGER,
+    public_visible INTEGER NOT NULL DEFAULT 0,
     description TEXT,
     measurements TEXT,
     preparation_type_id INTEGER,
@@ -87,6 +81,34 @@ CREATE TABLE preparation_types (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE acquisitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    acquisition_date TEXT,
+    source_name TEXT,
+    source_type TEXT,
+    seller_url TEXT,
+    purchase_price TEXT,
+    currency TEXT,
+    provenance_summary TEXT,
+    legality_notes TEXT,
+    ethical_confidence TEXT NOT NULL DEFAULT 'Unknown',
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE acquisition_documents (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    acquisition_id INTEGER NOT NULL,
+    document_path TEXT NOT NULL,
+    document_type TEXT,
+    title TEXT,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (acquisition_id) REFERENCES acquisitions (id) ON DELETE CASCADE
+);
+
 CREATE TABLE specimen_images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     specimen_id INTEGER NOT NULL,
@@ -140,8 +162,6 @@ class DatabaseTests(unittest.TestCase):
                 "collection_code": "FT-1000",
                 "title": "Test ammonite",
                 "taxon_id": taxon_id,
-                "ethical_confidence": "High",
-                "documentation_available": True,
             },
             self.db_path,
         )
@@ -149,15 +169,14 @@ class DatabaseTests(unittest.TestCase):
         specimen = db.get_specimen(specimen_id, self.db_path)
         self.assertIsNotNone(specimen)
         self.assertEqual(specimen["collection_code"], "FT-1000")
-        self.assertEqual(specimen["documentation_available"], 1)
 
-        filtered = db.list_specimens(self.db_path, search="ammonite", confidence="High", documented_only=True)
+        filtered = db.list_specimens(self.db_path, search="ammonite")
         self.assertEqual(len(filtered), 1)
 
     def test_seed_only_when_empty(self) -> None:
-        self.assertEqual(db.seed_specimens(self.db_path), 3)
+        self.assertEqual(db.seed_specimens(self.db_path), 1)
         self.assertEqual(db.seed_specimens(self.db_path), 0)
-        self.assertEqual(db.specimen_count(self.db_path), 3)
+        self.assertEqual(db.specimen_count(self.db_path), 1)
 
     def test_create_image_and_observation_records(self) -> None:
         specimen_id = db.create_specimen(
@@ -265,6 +284,50 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.get_taxonomy(taxon_id, self.db_path)["genus"], "Dactylioceras")
         self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
         self.assertEqual(db.get_locality(locality_id, self.db_path)["country"], "England")
+
+    def test_create_acquisition_and_document_records(self) -> None:
+        acquisition_id = db.create_acquisition(
+            {
+                "acquisition_date": "2026-07-03",
+                "source_name": "Example dealer",
+                "source_type": "Seller",
+                "purchase_price": "25.00",
+                "currency": "GBP",
+                "provenance_summary": "Documented purchase.",
+                "legality_notes": "Export status documented.",
+                "ethical_confidence": "High",
+            },
+            self.db_path,
+        )
+        document_id = db.create_acquisition_document(
+            {
+                "acquisition_id": acquisition_id,
+                "document_path": "data/documents/receipt.pdf",
+                "document_type": "Receipt",
+                "title": "Purchase receipt",
+            },
+            self.db_path,
+        )
+        specimen_id = db.create_specimen(
+            {
+                "collection_code": "FT-4000",
+                "title": "Provenance specimen",
+                "acquisition_id": acquisition_id,
+                "public_visible": True,
+            },
+            self.db_path,
+        )
+
+        acquisition = db.get_acquisition(acquisition_id, self.db_path)
+        specimen = db.get_specimen(specimen_id, self.db_path)
+        documents = db.list_acquisition_documents(acquisition_id, self.db_path)
+        self.assertEqual(acquisition["source_name"], "Example dealer")
+        self.assertTrue(db.has_acquisition_documents(acquisition_id, self.db_path))
+        self.assertEqual(specimen["acquisition_id"], acquisition_id)
+        self.assertEqual(specimen["public_visible"], 1)
+        self.assertEqual(documents[0]["id"], document_id)
+        filtered = db.list_specimens(self.db_path, documented_only=True)
+        self.assertEqual([row["id"] for row in filtered], [specimen_id])
 
 
 if __name__ == "__main__":

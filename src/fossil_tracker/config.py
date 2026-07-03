@@ -15,6 +15,32 @@ MIGRATIONS_PATH = PROJECT_ROOT / "migrations"
 
 
 def database_path() -> Path:
-    """Return the configured database path."""
+    """Return the configured database path.
 
-    return Path(os.environ.get("FOSSIL_TRACKER_DB", DEFAULT_DB_PATH)).expanduser()
+    :return: Path from FOSSIL_TRACKER_DB or the default SQLite location.
+    """
+
+    return _configured_path("FOSSIL_TRACKER_DB", DEFAULT_DB_PATH)
+
+
+def image_dir() -> Path:
+    """Return the configured image storage directory.
+
+    :return: Path from FOSSIL_TRACKER_IMAGES or the default image folder.
+    """
+
+    return _configured_path("FOSSIL_TRACKER_IMAGES", DEFAULT_IMAGE_DIR)
+
+
+def _configured_path(environment_variable: str, default_path: Path) -> Path:
+    """Resolve a path from an environment variable with a fallback.
+
+    :param environment_variable: Environment variable name to inspect.
+    :param default_path: Path to use when the variable is unset or blank.
+    :return: Expanded configured path or the supplied default path.
+    """
+
+    configured_path = os.environ.get(environment_variable)
+    if configured_path:
+        return Path(configured_path).expanduser()
+    return default_path

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import sqlite3
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -18,14 +17,8 @@ SPECIMEN_FIELDS = [
     "taxon_id",
     "geological_age_id",
     "locality_id",
-    "acquisition_date",
-    "source",
-    "purchase_price",
-    "currency",
-    "provenance_notes",
-    "legality_ethics_notes",
-    "ethical_confidence",
-    "documentation_available",
+    "acquisition_id",
+    "public_visible",
     "description",
     "measurements",
     "preparation_type_id",
@@ -94,9 +87,34 @@ PREPARATION_TYPE_FIELDS = [
     "description",
 ]
 
+ACQUISITION_FIELDS = [
+    "acquisition_date",
+    "source_name",
+    "source_type",
+    "seller_url",
+    "purchase_price",
+    "currency",
+    "provenance_summary",
+    "legality_notes",
+    "ethical_confidence",
+    "notes",
+]
+
+ACQUISITION_DOCUMENT_FIELDS = [
+    "acquisition_id",
+    "document_path",
+    "document_type",
+    "title",
+    "notes",
+]
+
 
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
-    """Open a SQLite connection with row dictionaries and foreign keys enabled."""
+    """Open a SQLite connection with row dictionaries and foreign keys enabled.
+
+    :param db_path: Optional SQLite database path.
+    :return: Configured SQLite connection.
+    """
 
     path = db_path or database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -107,7 +125,10 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
 
 
 def apply_migrations(db_path: Path | None = None) -> None:
-    """Apply outstanding yoyo migrations to the configured database."""
+    """Apply outstanding yoyo migrations to the configured database.
+
+    :param db_path: Optional SQLite database path.
+    """
 
     path = db_path or database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -127,7 +148,11 @@ def apply_migrations(db_path: Path | None = None) -> None:
 
 
 def specimen_count(db_path: Path | None = None) -> int:
-    """Return the number of registered specimens."""
+    """Return the number of registered specimens.
+
+    :param db_path: Optional SQLite database path.
+    :return: Count of specimen records.
+    """
 
     with connect(db_path) as connection:
         row = connection.execute("SELECT COUNT(*) AS count FROM specimens").fetchone()
@@ -140,7 +165,14 @@ def list_specimens(
     confidence: str = "All",
     documented_only: bool = False,
 ) -> list[sqlite3.Row]:
-    """List specimens with simple filters for the Streamlit register view."""
+    """List specimens with simple filters for the Streamlit register view.
+
+    :param db_path: Optional SQLite database path.
+    :param search: Free-text search term.
+    :param confidence: Ethical confidence filter, or "All".
+    :param documented_only: When true, only include specimens with acquisition documents.
+    :return: Matching specimen rows.
+    """
 
     clauses: list[str] = []
     params: list[Any] = []
@@ -161,18 +193,28 @@ def list_specimens(
                 OR geological_ages.period LIKE ?
                 OR geological_ages.epoch LIKE ?
                 OR geological_ages.stage LIKE ?
-                OR source LIKE ?
+                OR acquisitions.source_name LIKE ?
+                OR acquisitions.provenance_summary LIKE ?
             )"""
         )
         term = f"%{search.strip()}%"
-        params.extend([term] * 14)
+        params.extend([term] * 15)
 
     if confidence != "All":
-        clauses.append("ethical_confidence = ?")
+        clauses.append("acquisitions.ethical_confidence = ?")
         params.append(confidence)
 
     if documented_only:
-        clauses.append("documentation_available = 1")
+        # Documentation is inferred from linked document rows rather than a denormalized flag.
+        clauses.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM acquisition_documents
+                WHERE acquisition_documents.acquisition_id = specimens.acquisition_id
+            )
+            """
+        )
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
@@ -181,6 +223,7 @@ def list_specimens(
         LEFT JOIN taxonomy ON taxonomy.id = specimens.taxon_id
         LEFT JOIN localities ON localities.id = specimens.locality_id
         LEFT JOIN geological_ages ON geological_ages.id = specimens.geological_age_id
+        LEFT JOIN acquisitions ON acquisitions.id = specimens.acquisition_id
         {where}
         ORDER BY collection_code COLLATE NOCASE, created_at DESC
     """
@@ -190,7 +233,12 @@ def list_specimens(
 
 
 def get_specimen(specimen_id: int, db_path: Path | None = None) -> sqlite3.Row | None:
-    """Fetch one specimen by id."""
+    """Fetch one specimen by id.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Specimen row, or None when missing.
+    """
 
     with connect(db_path) as connection:
         return connection.execute(
@@ -199,13 +247,16 @@ def get_specimen(specimen_id: int, db_path: Path | None = None) -> sqlite3.Row |
 
 
 def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create a specimen and return its id."""
+    """Create a specimen.
+
+    :param values: Editable specimen field values.
+    :param db_path: Optional SQLite database path.
+    :return: New specimen id.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
     _coerce_specimen_foreign_keys(payload)
-    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
-    payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["created_at"] = now
     payload["updated_at"] = now
 
@@ -220,13 +271,16 @@ def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:
 
 
 def update_specimen(specimen_id: int, values: dict[str, Any], db_path: Path | None = None) -> None:
-    """Update the editable fields for a specimen."""
+    """Update the editable fields for a specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param values: Editable specimen field values.
+    :param db_path: Optional SQLite database path.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
     _coerce_specimen_foreign_keys(payload)
-    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
-    payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["updated_at"] = now
     assignments = ", ".join([f"{field} = ?" for field in [*SPECIMEN_FIELDS, "updated_at"]])
 
@@ -239,15 +293,161 @@ def update_specimen(specimen_id: int, values: dict[str, Any], db_path: Path | No
 
 
 def delete_specimen(specimen_id: int, db_path: Path | None = None) -> None:
-    """Delete one specimen."""
+    """Delete one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    """
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimens WHERE id = ?", (specimen_id,))
         connection.commit()
 
 
+def list_acquisitions(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List acquisition/provenance records.
+
+    :param db_path: Optional SQLite database path.
+    :return: Acquisition rows ordered for display.
+    """
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM acquisitions
+                ORDER BY acquisition_date DESC, source_name COLLATE NOCASE, id DESC
+                """
+            )
+        )
+
+
+def get_acquisition(
+    acquisition_id: int | None, db_path: Path | None = None
+) -> sqlite3.Row | None:
+    """Fetch one acquisition record.
+
+    :param acquisition_id: Acquisition primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Acquisition row, or None when missing or unset.
+    """
+
+    if not acquisition_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute(
+            "SELECT * FROM acquisitions WHERE id = ?", (acquisition_id,)
+        ).fetchone()
+
+
+def create_acquisition(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create an acquisition record.
+
+    :param values: Acquisition field values.
+    :param db_path: Optional SQLite database path.
+    :return: New acquisition id.
+    """
+
+    payload = _timestamped_payload(ACQUISITION_FIELDS, values)
+    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
+    return _insert_record(
+        "acquisitions",
+        [*ACQUISITION_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def list_acquisition_documents(
+    acquisition_id: int, db_path: Path | None = None
+) -> list[sqlite3.Row]:
+    """List documents linked to one acquisition.
+
+    :param acquisition_id: Acquisition primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Linked acquisition document rows.
+    """
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM acquisition_documents
+                WHERE acquisition_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (acquisition_id,),
+            )
+        )
+
+
+def has_acquisition_documents(
+    acquisition_id: int | None, db_path: Path | None = None
+) -> bool:
+    """Return whether an acquisition has linked documents.
+
+    :param acquisition_id: Acquisition primary key.
+    :param db_path: Optional SQLite database path.
+    :return: True when at least one document is linked.
+    """
+
+    if not acquisition_id:
+        return False
+    with connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM acquisition_documents
+            WHERE acquisition_id = ?
+            LIMIT 1
+            """,
+            (acquisition_id,),
+        ).fetchone()
+    return row is not None
+
+
+def create_acquisition_document(
+    values: dict[str, Any], db_path: Path | None = None
+) -> int:
+    """Create an acquisition document record.
+
+    :param values: Acquisition document field values.
+    :param db_path: Optional SQLite database path.
+    :return: New acquisition document id.
+    """
+
+    payload = _timestamped_payload(ACQUISITION_DOCUMENT_FIELDS, values)
+    payload["acquisition_id"] = _optional_int(payload.get("acquisition_id"))
+    return _insert_record(
+        "acquisition_documents",
+        [*ACQUISITION_DOCUMENT_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def delete_acquisition_document(
+    document_id: int, db_path: Path | None = None
+) -> None:
+    """Delete one acquisition document record.
+
+    :param document_id: Acquisition document primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM acquisition_documents WHERE id = ?", (document_id,))
+        connection.commit()
+
+
 def list_taxonomy(db_path: Path | None = None) -> list[sqlite3.Row]:
-    """List taxonomy records."""
+    """List taxonomy records.
+
+    :param db_path: Optional SQLite database path.
+    :return: Taxonomy rows ordered for display.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -262,7 +462,12 @@ def list_taxonomy(db_path: Path | None = None) -> list[sqlite3.Row]:
 
 
 def get_taxonomy(taxon_id: int | None, db_path: Path | None = None) -> sqlite3.Row | None:
-    """Fetch one taxonomy record."""
+    """Fetch one taxonomy record.
+
+    :param taxon_id: Taxonomy primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Taxonomy row, or None when missing or unset.
+    """
 
     if not taxon_id:
         return None
@@ -271,7 +476,12 @@ def get_taxonomy(taxon_id: int | None, db_path: Path | None = None) -> sqlite3.R
 
 
 def create_taxonomy(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create a taxonomy record and return its id."""
+    """Create a taxonomy record.
+
+    :param values: Taxonomy field values.
+    :param db_path: Optional SQLite database path.
+    :return: New taxonomy id.
+    """
 
     payload = _timestamped_payload(TAXONOMY_FIELDS, values)
     payload["identification_confidence"] = payload.get("identification_confidence") or "Unknown"
@@ -279,7 +489,11 @@ def create_taxonomy(values: dict[str, Any], db_path: Path | None = None) -> int:
 
 
 def list_localities(db_path: Path | None = None) -> list[sqlite3.Row]:
-    """List locality records."""
+    """List locality records.
+
+    :param db_path: Optional SQLite database path.
+    :return: Locality rows ordered for display.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -294,7 +508,12 @@ def list_localities(db_path: Path | None = None) -> list[sqlite3.Row]:
 
 
 def get_locality(locality_id: int | None, db_path: Path | None = None) -> sqlite3.Row | None:
-    """Fetch one locality record."""
+    """Fetch one locality record.
+
+    :param locality_id: Locality primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Locality row, or None when missing or unset.
+    """
 
     if not locality_id:
         return None
@@ -303,7 +522,12 @@ def get_locality(locality_id: int | None, db_path: Path | None = None) -> sqlite
 
 
 def create_locality(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create a locality record and return its id."""
+    """Create a locality record.
+
+    :param values: Locality field values.
+    :param db_path: Optional SQLite database path.
+    :return: New locality id.
+    """
 
     payload = _timestamped_payload(LOCALITY_FIELDS, values)
     payload["latitude"] = _optional_float(payload.get("latitude"))
@@ -312,7 +536,11 @@ def create_locality(values: dict[str, Any], db_path: Path | None = None) -> int:
 
 
 def list_geological_ages(db_path: Path | None = None) -> list[sqlite3.Row]:
-    """List geological age records."""
+    """List geological age records.
+
+    :param db_path: Optional SQLite database path.
+    :return: Geological age rows ordered for display.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -329,7 +557,12 @@ def list_geological_ages(db_path: Path | None = None) -> list[sqlite3.Row]:
 def get_geological_age(
     geological_age_id: int | None, db_path: Path | None = None
 ) -> sqlite3.Row | None:
-    """Fetch one geological age record."""
+    """Fetch one geological age record.
+
+    :param geological_age_id: Geological age primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Geological age row, or None when missing or unset.
+    """
 
     if not geological_age_id:
         return None
@@ -340,7 +573,12 @@ def get_geological_age(
 
 
 def create_geological_age(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create a geological age record and return its id."""
+    """Create a geological age record.
+
+    :param values: Geological age field values.
+    :param db_path: Optional SQLite database path.
+    :return: New geological age id.
+    """
 
     payload = _timestamped_payload(GEOLOGICAL_AGE_FIELDS, values)
     payload["min_ma"] = _optional_float(payload.get("min_ma"))
@@ -354,7 +592,11 @@ def create_geological_age(values: dict[str, Any], db_path: Path | None = None) -
 
 
 def list_preparation_types(db_path: Path | None = None) -> list[sqlite3.Row]:
-    """List controlled preparation types."""
+    """List controlled preparation types.
+
+    :param db_path: Optional SQLite database path.
+    :return: Preparation type rows ordered for display.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -369,7 +611,12 @@ def list_preparation_types(db_path: Path | None = None) -> list[sqlite3.Row]:
 
 
 def create_preparation_type(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create a preparation type and return its id."""
+    """Create a preparation type.
+
+    :param values: Preparation type field values.
+    :param db_path: Optional SQLite database path.
+    :return: New preparation type id.
+    """
 
     payload = _timestamped_payload(PREPARATION_TYPE_FIELDS, values)
     return _insert_record(
@@ -383,7 +630,12 @@ def create_preparation_type(values: dict[str, Any], db_path: Path | None = None)
 def list_specimen_images(
     specimen_id: int, db_path: Path | None = None
 ) -> list[sqlite3.Row]:
-    """List images for one specimen."""
+    """List images for one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Image rows linked to the specimen.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -400,7 +652,12 @@ def list_specimen_images(
 
 
 def create_specimen_image(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create an image record and return its id."""
+    """Create an image record.
+
+    :param values: Image field values.
+    :param db_path: Optional SQLite database path.
+    :return: New image id.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in IMAGE_FIELDS}
@@ -423,7 +680,12 @@ def create_specimen_image(values: dict[str, Any], db_path: Path | None = None) -
 def update_specimen_image(
     image_id: int, values: dict[str, Any], db_path: Path | None = None
 ) -> None:
-    """Update an image record."""
+    """Update an image record.
+
+    :param image_id: Image primary key.
+    :param values: Image field values.
+    :param db_path: Optional SQLite database path.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in IMAGE_FIELDS}
@@ -438,7 +700,11 @@ def update_specimen_image(
 
 
 def delete_specimen_image(image_id: int, db_path: Path | None = None) -> None:
-    """Delete one image record."""
+    """Delete one image record.
+
+    :param image_id: Image primary key.
+    :param db_path: Optional SQLite database path.
+    """
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimen_images WHERE id = ?", (image_id,))
@@ -448,7 +714,12 @@ def delete_specimen_image(image_id: int, db_path: Path | None = None) -> None:
 def list_observations(
     specimen_id: int, db_path: Path | None = None
 ) -> list[sqlite3.Row]:
-    """List observations for one specimen."""
+    """List observations for one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Observation rows linked to the specimen.
+    """
 
     with connect(db_path) as connection:
         return list(
@@ -465,7 +736,12 @@ def list_observations(
 
 
 def create_observation(values: dict[str, Any], db_path: Path | None = None) -> int:
-    """Create an observation record and return its id."""
+    """Create an observation record.
+
+    :param values: Observation field values.
+    :param db_path: Optional SQLite database path.
+    :return: New observation id.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
@@ -488,7 +764,12 @@ def create_observation(values: dict[str, Any], db_path: Path | None = None) -> i
 def update_observation(
     observation_id: int, values: dict[str, Any], db_path: Path | None = None
 ) -> None:
-    """Update an observation record."""
+    """Update an observation record.
+
+    :param observation_id: Observation primary key.
+    :param values: Observation field values.
+    :param db_path: Optional SQLite database path.
+    """
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
@@ -505,7 +786,11 @@ def update_observation(
 
 
 def delete_observation(observation_id: int, db_path: Path | None = None) -> None:
-    """Delete one observation record."""
+    """Delete one observation record.
+
+    :param observation_id: Observation primary key.
+    :param db_path: Optional SQLite database path.
+    """
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM observations WHERE id = ?", (observation_id,))
@@ -513,7 +798,11 @@ def delete_observation(observation_id: int, db_path: Path | None = None) -> None
 
 
 def export_csv(destination: Path, db_path: Path | None = None) -> None:
-    """Export the register to CSV for long-term portability."""
+    """Export the register to CSV for long-term portability.
+
+    :param destination: CSV file path to write.
+    :param db_path: Optional SQLite database path.
+    """
 
     rows = list_specimens(db_path=db_path)
     fieldnames = ["id", *SPECIMEN_FIELDS, "created_at", "updated_at"]
@@ -526,7 +815,12 @@ def export_csv(destination: Path, db_path: Path | None = None) -> None:
 
 
 def import_csv(source: Path, db_path: Path | None = None) -> int:
-    """Import specimen rows from a CSV file created by Fossil Tracker."""
+    """Import specimen rows from a CSV file created by Fossil Tracker.
+
+    :param source: CSV file path to read.
+    :param db_path: Optional SQLite database path.
+    :return: Number of imported specimens.
+    """
 
     count = 0
     with source.open("r", newline="", encoding="utf-8") as handle:
@@ -544,7 +838,11 @@ def import_csv(source: Path, db_path: Path | None = None) -> int:
 
 
 def seed_specimens(db_path: Path | None = None) -> int:
-    """Create the three suggested starter records when the register is empty."""
+    """Create the suggested starter record when the register is empty.
+
+    :param db_path: Optional SQLite database path.
+    :return: Number of starter specimens created.
+    """
 
     if specimen_count(db_path) > 0:
         return 0
@@ -559,23 +857,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
         },
         db_path,
     )
-    orthocone_taxon_id = create_taxonomy(
-        {
-            "kingdom": "Animalia",
-            "phylum": "Mollusca",
-            "class_name": "Cephalopoda",
-            "identification_confidence": "Unknown",
-            "identification_notes": "Orthocone nautiloid, often sold as Orthoceras",
-        },
-        db_path,
-    )
-    stromatolite_taxon_id = create_taxonomy(
-        {
-            "identification_confidence": "Unknown",
-            "identification_notes": "Microbialite, pending acquisition",
-        },
-        db_path,
-    )
     madagascar_locality_id = create_locality(
         {
             "locality_name": "Exact locality unknown",
@@ -585,34 +866,19 @@ def seed_specimens(db_path: Path | None = None) -> int:
         },
         db_path,
     )
-    morocco_locality_id = create_locality(
-        {
-            "locality_name": "Likely Morocco, exact locality unknown",
-            "country": "Morocco",
-            "locality_precision": "Country uncertain",
-            "locality_notes": "Starter record. Verify seller documentation.",
-        },
-        db_path,
-    )
-    unknown_locality_id = create_locality(
-        {
-            "locality_name": "To be confirmed",
-            "locality_precision": "Unknown",
-        },
-        db_path,
-    )
     jurassic_age_id = _find_geological_age_id("Jurassic", db_path)
-    palaeozoic_age_id = create_geological_age(
+    split_polished_id = _find_preparation_type_id("Split and polished", db_path)
+    ammonite_acquisition_id = create_acquisition(
         {
-            "era": "Palaeozoic",
-            "notes": "Broad starter age record. Replace with a more precise period where possible.",
+            "source_name": "Unrecorded starter entry",
+            "provenance_summary": "Seed record. Replace with the real acquisition source and documentation.",
+            "legality_notes": "Unverified. Confirm export/import status and seller provenance.",
+            "ethical_confidence": "Unknown",
         },
         db_path,
     )
-    split_polished_id = _find_preparation_type_id("Split and polished", db_path)
-    polished_id = _find_preparation_type_id("Polished", db_path)
 
-    starter_records: Iterable[dict[str, Any]] = [
+    create_specimen(
         {
             "collection_code": "FT-0001",
             "title": "Split and polished Madagascan ammonite",
@@ -620,62 +886,41 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "taxon_id": ammonite_taxon_id,
             "geological_age_id": jurassic_age_id,
             "locality_id": madagascar_locality_id,
-            "source": "Unrecorded starter entry",
-            "provenance_notes": "Seed record. Replace with the real acquisition source and documentation.",
-            "legality_ethics_notes": "Unverified. Confirm export/import status and seller provenance.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
+            "acquisition_id": ammonite_acquisition_id,
             "description": "Polished cross-section showing chamber structure.",
             "preparation_type_id": split_polished_id,
+            "public_visible": True,
             "field_notes_links": "Shell morphology",
             "public_notes": "Candidate public summary once provenance is documented.",
         },
-        {
-            "collection_code": "FT-0002",
-            "title": "Small polished Orthoceras fossil",
-            "common_name": "Orthoceras",
-            "taxon_id": orthocone_taxon_id,
-            "geological_age_id": palaeozoic_age_id,
-            "locality_id": morocco_locality_id,
-            "source": "Unrecorded starter entry",
-            "provenance_notes": "Seed record. Replace common trade label with documented details where possible.",
-            "legality_ethics_notes": "Unverified. Confirm source and export documentation.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
-            "description": "Small polished orthocone fossil suitable for morphology notes.",
-            "preparation_type_id": polished_id,
-            "field_notes_links": "Orthocone modelling",
-        },
-        {
-            "collection_code": "FT-0003",
-            "title": "Future stromatolite specimen",
-            "common_name": "Stromatolite",
-            "taxon_id": stromatolite_taxon_id,
-            "locality_id": unknown_locality_id,
-            "source": "Placeholder",
-            "provenance_notes": "Only acquire if a genuine, well-documented, ethical specimen is found.",
-            "legality_ethics_notes": "Acquisition not yet made.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
-            "description": "Placeholder connecting the register to stromatolite growth modelling.",
-            "field_notes_links": "Stromatolite growth modelling",
-        },
-    ]
-
-    for record in starter_records:
-        create_specimen(record, db_path=db_path)
-    return len(list(starter_records))
+        db_path=db_path,
+    )
+    return 1
 
 
 def _coerce_csv_value(field: str, value: str | None) -> Any:
-    if field == "documentation_available":
+    """Convert a CSV string value into the type expected for a specimen field.
+
+    :param field: Specimen field name.
+    :param value: Raw CSV value.
+    :return: Coerced value for database insertion.
+    """
+
+    if field == "public_visible":
         return str(value).strip().lower() in {"1", "true", "yes", "y"}
-    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id"}:
+    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"}:
         return _optional_int(value)
     return value
 
 
 def _timestamped_payload(fields: list[str], values: dict[str, Any]) -> dict[str, Any]:
+    """Build an insert payload with created and updated timestamps.
+
+    :param fields: Field names to copy from values.
+    :param values: Input values.
+    :return: Payload dictionary including timestamps.
+    """
+
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in fields}
     payload["created_at"] = now
@@ -689,22 +934,45 @@ def _insert_record(
     payload: dict[str, Any],
     db_path: Path | None = None,
 ) -> int:
+    """Insert one row into a table.
+
+    :param table: Target table name.
+    :param fields: Ordered field names to insert.
+    :param payload: Values keyed by field name.
+    :param db_path: Optional SQLite database path.
+    :return: New record id.
+    """
+
     placeholders = ", ".join(["?"] * len(fields))
     with connect(db_path) as connection:
         cursor = connection.execute(
             f"INSERT INTO {table} ({', '.join(fields)}) VALUES ({placeholders})",
             [payload[field] for field in fields],
         )
+        record_id = int(cursor.lastrowid)
         connection.commit()
-        return int(cursor.lastrowid)
+    return record_id
 
 
 def _coerce_specimen_foreign_keys(payload: dict[str, Any]) -> None:
-    for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id"]:
+    """Normalize specimen foreign-key and boolean values in place.
+
+    :param payload: Specimen insert/update payload.
+    """
+
+    for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"]:
         payload[field] = _optional_int(payload.get(field))
+    payload["public_visible"] = bool(payload.get("public_visible"))
 
 
 def _find_geological_age_id(period: str, db_path: Path | None = None) -> int | None:
+    """Find the first geological age id for a period.
+
+    :param period: Geological period name.
+    :param db_path: Optional SQLite database path.
+    :return: Geological age id, or None when missing.
+    """
+
     with connect(db_path) as connection:
         row = connection.execute(
             "SELECT id FROM geological_ages WHERE period = ? ORDER BY id LIMIT 1",
@@ -714,6 +982,13 @@ def _find_geological_age_id(period: str, db_path: Path | None = None) -> int | N
 
 
 def _find_preparation_type_id(name: str, db_path: Path | None = None) -> int | None:
+    """Find the first preparation type id by name.
+
+    :param name: Preparation type name.
+    :param db_path: Optional SQLite database path.
+    :return: Preparation type id, or None when missing.
+    """
+
     with connect(db_path) as connection:
         row = connection.execute(
             "SELECT id FROM preparation_types WHERE name = ? ORDER BY id LIMIT 1",
@@ -723,12 +998,24 @@ def _find_preparation_type_id(name: str, db_path: Path | None = None) -> int | N
 
 
 def _optional_int(value: Any) -> int | None:
+    """Convert an optional value to an integer.
+
+    :param value: Raw value.
+    :return: Integer value, or None when blank.
+    """
+
     if value is None or value == "":
         return None
     return int(value)
 
 
 def _optional_float(value: Any) -> float | None:
+    """Convert an optional value to a float.
+
+    :param value: Raw value.
+    :return: Float value, or None when blank.
+    """
+
     if value is None or value == "":
         return None
     return float(value)

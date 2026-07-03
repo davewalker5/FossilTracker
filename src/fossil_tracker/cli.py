@@ -12,6 +12,12 @@ from .db import apply_migrations, export_csv, import_csv, seed_specimens, specim
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the Fossil Tracker command-line interface.
+
+    :param argv: Optional argument list; uses process arguments when omitted.
+    :return: Process-style exit code.
+    """
+
     parser = argparse.ArgumentParser(prog="fossil-tracker")
     parser.add_argument(
         "--db",

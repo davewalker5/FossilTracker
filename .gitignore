@@ -141,3 +141,5 @@ cython_debug/
 .vscode/
 .idea/
 proto/
+fossil_tracker.sqlite3
+images/

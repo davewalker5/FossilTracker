@@ -17,4 +17,7 @@ MIGRATIONS_PATH = PROJECT_ROOT / "migrations"
 def database_path() -> Path:
     """Return the configured database path."""
 
-    return Path(os.environ.get("FOSSIL_TRACKER_DB", DEFAULT_DB_PATH)).expanduser()
+    configured_path = os.environ.get("FOSSIL_TRACKER_DB")
+    if configured_path:
+        return Path(configured_path).expanduser()
+    return DEFAULT_DB_PATH

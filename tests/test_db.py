@@ -176,9 +176,9 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(len(filtered), 1)
 
     def test_seed_only_when_empty(self) -> None:
-        self.assertEqual(db.seed_specimens(self.db_path), 3)
+        self.assertEqual(db.seed_specimens(self.db_path), 1)
         self.assertEqual(db.seed_specimens(self.db_path), 0)
-        self.assertEqual(db.specimen_count(self.db_path), 3)
+        self.assertEqual(db.specimen_count(self.db_path), 1)
 
     def test_create_image_and_observation_records(self) -> None:
         specimen_id = db.create_specimen(

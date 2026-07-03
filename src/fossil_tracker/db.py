@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import sqlite3
-from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -649,7 +648,7 @@ def import_csv(source: Path, db_path: Path | None = None) -> int:
 
 
 def seed_specimens(db_path: Path | None = None) -> int:
-    """Create the three suggested starter records when the register is empty."""
+    """Create the suggested starter record when the register is empty."""
 
     if specimen_count(db_path) > 0:
         return 0
@@ -664,23 +663,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
         },
         db_path,
     )
-    orthocone_taxon_id = create_taxonomy(
-        {
-            "kingdom": "Animalia",
-            "phylum": "Mollusca",
-            "class_name": "Cephalopoda",
-            "identification_confidence": "Unknown",
-            "identification_notes": "Orthocone nautiloid, often sold as Orthoceras",
-        },
-        db_path,
-    )
-    stromatolite_taxon_id = create_taxonomy(
-        {
-            "identification_confidence": "Unknown",
-            "identification_notes": "Microbialite, pending acquisition",
-        },
-        db_path,
-    )
     madagascar_locality_id = create_locality(
         {
             "locality_name": "Exact locality unknown",
@@ -690,32 +672,8 @@ def seed_specimens(db_path: Path | None = None) -> int:
         },
         db_path,
     )
-    morocco_locality_id = create_locality(
-        {
-            "locality_name": "Likely Morocco, exact locality unknown",
-            "country": "Morocco",
-            "locality_precision": "Country uncertain",
-            "locality_notes": "Starter record. Verify seller documentation.",
-        },
-        db_path,
-    )
-    unknown_locality_id = create_locality(
-        {
-            "locality_name": "To be confirmed",
-            "locality_precision": "Unknown",
-        },
-        db_path,
-    )
     jurassic_age_id = _find_geological_age_id("Jurassic", db_path)
-    palaeozoic_age_id = create_geological_age(
-        {
-            "era": "Palaeozoic",
-            "notes": "Broad starter age record. Replace with a more precise period where possible.",
-        },
-        db_path,
-    )
     split_polished_id = _find_preparation_type_id("Split and polished", db_path)
-    polished_id = _find_preparation_type_id("Polished", db_path)
     ammonite_acquisition_id = create_acquisition(
         {
             "source_name": "Unrecorded starter entry",
@@ -726,28 +684,8 @@ def seed_specimens(db_path: Path | None = None) -> int:
         },
         db_path,
     )
-    orthoceras_acquisition_id = create_acquisition(
-        {
-            "source_name": "Unrecorded starter entry",
-            "provenance_summary": "Seed record. Replace common trade label with documented details where possible.",
-            "legality_notes": "Unverified. Confirm source and export documentation.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
-        },
-        db_path,
-    )
-    placeholder_acquisition_id = create_acquisition(
-        {
-            "source_name": "Placeholder",
-            "provenance_summary": "Only acquire if a genuine, well-documented, ethical specimen is found.",
-            "legality_notes": "Acquisition not yet made.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
-        },
-        db_path,
-    )
 
-    starter_records: Iterable[dict[str, Any]] = [
+    create_specimen(
         {
             "collection_code": "FT-0001",
             "title": "Split and polished Madagascan ammonite",
@@ -762,33 +700,9 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "field_notes_links": "Shell morphology",
             "public_notes": "Candidate public summary once provenance is documented.",
         },
-        {
-            "collection_code": "FT-0002",
-            "title": "Small polished Orthoceras fossil",
-            "common_name": "Orthoceras",
-            "taxon_id": orthocone_taxon_id,
-            "geological_age_id": palaeozoic_age_id,
-            "locality_id": morocco_locality_id,
-            "acquisition_id": orthoceras_acquisition_id,
-            "description": "Small polished orthocone fossil suitable for morphology notes.",
-            "preparation_type_id": polished_id,
-            "field_notes_links": "Orthocone modelling",
-        },
-        {
-            "collection_code": "FT-0003",
-            "title": "Future stromatolite specimen",
-            "common_name": "Stromatolite",
-            "taxon_id": stromatolite_taxon_id,
-            "locality_id": unknown_locality_id,
-            "acquisition_id": placeholder_acquisition_id,
-            "description": "Placeholder connecting the register to stromatolite growth modelling.",
-            "field_notes_links": "Stromatolite growth modelling",
-        },
-    ]
-
-    for record in starter_records:
-        create_specimen(record, db_path=db_path)
-    return len(list(starter_records))
+        db_path=db_path,
+    )
+    return 1
 
 
 def _coerce_csv_value(field: str, value: str | None) -> Any:

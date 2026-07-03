@@ -157,7 +157,15 @@ By default, the application stores its database at:
 data/fossil_tracker.sqlite3
 ```
 
-To use an alternative location, set the FOSSIL_TRACKER_DB environment variable before running the application.
+To use an alternative database location, set the FOSSIL_TRACKER_DB environment variable before running the application.
+
+By default, images are stored in the following folder:
+
+```
+data/images
+```
+
+To use an alternative image folder, set the FOSSIL_TRACKER_IMAGES environment variable.
 
 3. Start the Streamlit application
 
@@ -202,7 +210,6 @@ They can also be imported as follows:
 ```bash
 fossil-tracker import-csv data/fossil_tracker_export.csv
 ```
-
 ## Roadmap
 
 Planned development includes:

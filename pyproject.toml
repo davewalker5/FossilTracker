@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fossil-tracker"
+version = "0.1.0"
+description = "Fossil Collection Tracker"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+  "streamlit",
+  "datasette",
+  "yoyo-migrations"
+]
+
+[project.scripts]
+fossil-tracker = "fossil_tracker.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["fossil_tracker*"]
+
+[tool.setuptools.package-data]
+fossil_tracker = ["migrations/*.py"]

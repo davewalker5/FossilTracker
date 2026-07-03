@@ -15,10 +15,9 @@ SPECIMEN_FIELDS = [
     "collection_code",
     "title",
     "common_name",
-    "taxonomic_identification",
-    "geological_age",
-    "formation_or_locality",
-    "country_region",
+    "taxon_id",
+    "geological_age_id",
+    "locality_id",
     "acquisition_date",
     "source",
     "purchase_price",
@@ -29,7 +28,7 @@ SPECIMEN_FIELDS = [
     "documentation_available",
     "description",
     "measurements",
-    "preparation_type",
+    "preparation_type_id",
     "storage_location",
     "field_notes_links",
     "public_notes",
@@ -54,6 +53,45 @@ OBSERVATION_FIELDS = [
     "notes",
     "related_project",
     "related_url",
+]
+
+TAXONOMY_FIELDS = [
+    "kingdom",
+    "phylum",
+    "class_name",
+    "order_name",
+    "family",
+    "genus",
+    "species",
+    "identification_confidence",
+    "identification_notes",
+]
+
+LOCALITY_FIELDS = [
+    "locality_name",
+    "formation",
+    "member",
+    "region",
+    "country",
+    "latitude",
+    "longitude",
+    "locality_precision",
+    "locality_notes",
+]
+
+GEOLOGICAL_AGE_FIELDS = [
+    "era",
+    "period",
+    "epoch",
+    "stage",
+    "min_ma",
+    "max_ma",
+    "notes",
+]
+
+PREPARATION_TYPE_FIELDS = [
+    "name",
+    "description",
 ]
 
 
@@ -113,14 +151,21 @@ def list_specimens(
                 collection_code LIKE ?
                 OR title LIKE ?
                 OR common_name LIKE ?
-                OR taxonomic_identification LIKE ?
-                OR formation_or_locality LIKE ?
-                OR country_region LIKE ?
+                OR taxonomy.genus LIKE ?
+                OR taxonomy.species LIKE ?
+                OR taxonomy.identification_notes LIKE ?
+                OR localities.locality_name LIKE ?
+                OR localities.formation LIKE ?
+                OR localities.region LIKE ?
+                OR localities.country LIKE ?
+                OR geological_ages.period LIKE ?
+                OR geological_ages.epoch LIKE ?
+                OR geological_ages.stage LIKE ?
                 OR source LIKE ?
             )"""
         )
         term = f"%{search.strip()}%"
-        params.extend([term] * 7)
+        params.extend([term] * 14)
 
     if confidence != "All":
         clauses.append("ethical_confidence = ?")
@@ -131,8 +176,11 @@ def list_specimens(
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
-        SELECT *
+        SELECT specimens.*
         FROM specimens
+        LEFT JOIN taxonomy ON taxonomy.id = specimens.taxon_id
+        LEFT JOIN localities ON localities.id = specimens.locality_id
+        LEFT JOIN geological_ages ON geological_ages.id = specimens.geological_age_id
         {where}
         ORDER BY collection_code COLLATE NOCASE, created_at DESC
     """
@@ -155,6 +203,7 @@ def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
+    _coerce_specimen_foreign_keys(payload)
     payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
     payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["created_at"] = now
@@ -175,6 +224,7 @@ def update_specimen(specimen_id: int, values: dict[str, Any], db_path: Path | No
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
+    _coerce_specimen_foreign_keys(payload)
     payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
     payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["updated_at"] = now
@@ -194,6 +244,140 @@ def delete_specimen(specimen_id: int, db_path: Path | None = None) -> None:
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimens WHERE id = ?", (specimen_id,))
         connection.commit()
+
+
+def list_taxonomy(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List taxonomy records."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM taxonomy
+                ORDER BY genus COLLATE NOCASE, species COLLATE NOCASE, identification_notes COLLATE NOCASE
+                """
+            )
+        )
+
+
+def get_taxonomy(taxon_id: int | None, db_path: Path | None = None) -> sqlite3.Row | None:
+    """Fetch one taxonomy record."""
+
+    if not taxon_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute("SELECT * FROM taxonomy WHERE id = ?", (taxon_id,)).fetchone()
+
+
+def create_taxonomy(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create a taxonomy record and return its id."""
+
+    payload = _timestamped_payload(TAXONOMY_FIELDS, values)
+    payload["identification_confidence"] = payload.get("identification_confidence") or "Unknown"
+    return _insert_record("taxonomy", [*TAXONOMY_FIELDS, "created_at", "updated_at"], payload, db_path)
+
+
+def list_localities(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List locality records."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM localities
+                ORDER BY country COLLATE NOCASE, region COLLATE NOCASE, locality_name COLLATE NOCASE
+                """
+            )
+        )
+
+
+def get_locality(locality_id: int | None, db_path: Path | None = None) -> sqlite3.Row | None:
+    """Fetch one locality record."""
+
+    if not locality_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute("SELECT * FROM localities WHERE id = ?", (locality_id,)).fetchone()
+
+
+def create_locality(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create a locality record and return its id."""
+
+    payload = _timestamped_payload(LOCALITY_FIELDS, values)
+    payload["latitude"] = _optional_float(payload.get("latitude"))
+    payload["longitude"] = _optional_float(payload.get("longitude"))
+    return _insert_record("localities", [*LOCALITY_FIELDS, "created_at", "updated_at"], payload, db_path)
+
+
+def list_geological_ages(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List geological age records."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM geological_ages
+                ORDER BY max_ma DESC, min_ma DESC, period COLLATE NOCASE
+                """
+            )
+        )
+
+
+def get_geological_age(
+    geological_age_id: int | None, db_path: Path | None = None
+) -> sqlite3.Row | None:
+    """Fetch one geological age record."""
+
+    if not geological_age_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute(
+            "SELECT * FROM geological_ages WHERE id = ?", (geological_age_id,)
+        ).fetchone()
+
+
+def create_geological_age(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create a geological age record and return its id."""
+
+    payload = _timestamped_payload(GEOLOGICAL_AGE_FIELDS, values)
+    payload["min_ma"] = _optional_float(payload.get("min_ma"))
+    payload["max_ma"] = _optional_float(payload.get("max_ma"))
+    return _insert_record(
+        "geological_ages",
+        [*GEOLOGICAL_AGE_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def list_preparation_types(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List controlled preparation types."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM preparation_types
+                ORDER BY name COLLATE NOCASE
+                """
+            )
+        )
+
+
+def create_preparation_type(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create a preparation type and return its id."""
+
+    payload = _timestamped_payload(PREPARATION_TYPE_FIELDS, values)
+    return _insert_record(
+        "preparation_types",
+        [*PREPARATION_TYPE_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
 
 
 def list_specimen_images(
@@ -365,22 +549,84 @@ def seed_specimens(db_path: Path | None = None) -> int:
     if specimen_count(db_path) > 0:
         return 0
 
+    ammonite_taxon_id = create_taxonomy(
+        {
+            "kingdom": "Animalia",
+            "phylum": "Mollusca",
+            "class_name": "Cephalopoda",
+            "identification_confidence": "Unknown",
+            "identification_notes": "Ammonoidea, identification pending",
+        },
+        db_path,
+    )
+    orthocone_taxon_id = create_taxonomy(
+        {
+            "kingdom": "Animalia",
+            "phylum": "Mollusca",
+            "class_name": "Cephalopoda",
+            "identification_confidence": "Unknown",
+            "identification_notes": "Orthocone nautiloid, often sold as Orthoceras",
+        },
+        db_path,
+    )
+    stromatolite_taxon_id = create_taxonomy(
+        {
+            "identification_confidence": "Unknown",
+            "identification_notes": "Microbialite, pending acquisition",
+        },
+        db_path,
+    )
+    madagascar_locality_id = create_locality(
+        {
+            "locality_name": "Exact locality unknown",
+            "country": "Madagascar",
+            "locality_precision": "Country only",
+            "locality_notes": "Starter record. Replace with documented locality where possible.",
+        },
+        db_path,
+    )
+    morocco_locality_id = create_locality(
+        {
+            "locality_name": "Likely Morocco, exact locality unknown",
+            "country": "Morocco",
+            "locality_precision": "Country uncertain",
+            "locality_notes": "Starter record. Verify seller documentation.",
+        },
+        db_path,
+    )
+    unknown_locality_id = create_locality(
+        {
+            "locality_name": "To be confirmed",
+            "locality_precision": "Unknown",
+        },
+        db_path,
+    )
+    jurassic_age_id = _find_geological_age_id("Jurassic", db_path)
+    palaeozoic_age_id = create_geological_age(
+        {
+            "era": "Palaeozoic",
+            "notes": "Broad starter age record. Replace with a more precise period where possible.",
+        },
+        db_path,
+    )
+    split_polished_id = _find_preparation_type_id("Split and polished", db_path)
+    polished_id = _find_preparation_type_id("Polished", db_path)
+
     starter_records: Iterable[dict[str, Any]] = [
         {
             "collection_code": "FT-0001",
             "title": "Split and polished Madagascan ammonite",
             "common_name": "Ammonite",
-            "taxonomic_identification": "Ammonoidea, identification pending",
-            "geological_age": "Jurassic or Cretaceous, verify with seller documentation",
-            "formation_or_locality": "Madagascar, exact locality unknown",
-            "country_region": "Madagascar",
+            "taxon_id": ammonite_taxon_id,
+            "geological_age_id": jurassic_age_id,
+            "locality_id": madagascar_locality_id,
             "source": "Unrecorded starter entry",
             "provenance_notes": "Seed record. Replace with the real acquisition source and documentation.",
             "legality_ethics_notes": "Unverified. Confirm export/import status and seller provenance.",
             "ethical_confidence": "Unknown",
             "documentation_available": False,
             "description": "Polished cross-section showing chamber structure.",
-            "preparation_type": "Split and polished",
+            "preparation_type_id": split_polished_id,
             "field_notes_links": "Shell morphology",
             "public_notes": "Candidate public summary once provenance is documented.",
         },
@@ -388,26 +634,24 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "collection_code": "FT-0002",
             "title": "Small polished Orthoceras fossil",
             "common_name": "Orthoceras",
-            "taxonomic_identification": "Orthocone nautiloid, often sold as Orthoceras",
-            "geological_age": "Palaeozoic, verify exact age",
-            "formation_or_locality": "Likely Morocco, exact locality unknown",
-            "country_region": "Morocco",
+            "taxon_id": orthocone_taxon_id,
+            "geological_age_id": palaeozoic_age_id,
+            "locality_id": morocco_locality_id,
             "source": "Unrecorded starter entry",
             "provenance_notes": "Seed record. Replace common trade label with documented details where possible.",
             "legality_ethics_notes": "Unverified. Confirm source and export documentation.",
             "ethical_confidence": "Unknown",
             "documentation_available": False,
             "description": "Small polished orthocone fossil suitable for morphology notes.",
-            "preparation_type": "Polished",
+            "preparation_type_id": polished_id,
             "field_notes_links": "Orthocone modelling",
         },
         {
             "collection_code": "FT-0003",
             "title": "Future stromatolite specimen",
             "common_name": "Stromatolite",
-            "taxonomic_identification": "Microbialite, pending acquisition",
-            "geological_age": "To be confirmed",
-            "formation_or_locality": "To be confirmed",
+            "taxon_id": stromatolite_taxon_id,
+            "locality_id": unknown_locality_id,
             "source": "Placeholder",
             "provenance_notes": "Only acquire if a genuine, well-documented, ethical specimen is found.",
             "legality_ethics_notes": "Acquisition not yet made.",
@@ -426,4 +670,65 @@ def seed_specimens(db_path: Path | None = None) -> int:
 def _coerce_csv_value(field: str, value: str | None) -> Any:
     if field == "documentation_available":
         return str(value).strip().lower() in {"1", "true", "yes", "y"}
+    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id"}:
+        return _optional_int(value)
     return value
+
+
+def _timestamped_payload(fields: list[str], values: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    payload = {field: values.get(field) for field in fields}
+    payload["created_at"] = now
+    payload["updated_at"] = now
+    return payload
+
+
+def _insert_record(
+    table: str,
+    fields: list[str],
+    payload: dict[str, Any],
+    db_path: Path | None = None,
+) -> int:
+    placeholders = ", ".join(["?"] * len(fields))
+    with connect(db_path) as connection:
+        cursor = connection.execute(
+            f"INSERT INTO {table} ({', '.join(fields)}) VALUES ({placeholders})",
+            [payload[field] for field in fields],
+        )
+        connection.commit()
+        return int(cursor.lastrowid)
+
+
+def _coerce_specimen_foreign_keys(payload: dict[str, Any]) -> None:
+    for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id"]:
+        payload[field] = _optional_int(payload.get(field))
+
+
+def _find_geological_age_id(period: str, db_path: Path | None = None) -> int | None:
+    with connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id FROM geological_ages WHERE period = ? ORDER BY id LIMIT 1",
+            (period,),
+        ).fetchone()
+    return int(row["id"]) if row else None
+
+
+def _find_preparation_type_id(name: str, db_path: Path | None = None) -> int | None:
+    with connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT id FROM preparation_types WHERE name = ? ORDER BY id LIMIT 1",
+            (name,),
+        ).fetchone()
+    return int(row["id"]) if row else None
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    return int(value)
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    return float(value)

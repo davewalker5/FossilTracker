@@ -47,6 +47,8 @@ The application is built using:
 - Uploaded image storage under _data/images_
 - Markdown-friendly observation notes
 - Basic per-specimen image gallery
+- Controlled taxonomy, locality, geological age, and preparation records
+- Specimen links to structured taxonomic and geological context
 - SQLite browsing through Datasette
 - CSV import and export for specimen records
 

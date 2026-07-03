@@ -8,7 +8,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from fossil_tracker.config import APP_NAME, DEFAULT_IMAGE_DIR, PROJECT_ROOT, database_path
+from fossil_tracker.config import APP_NAME, PROJECT_ROOT, database_path, image_dir
 from fossil_tracker.db import (
     SPECIMEN_FIELDS,
     apply_migrations,
@@ -31,6 +31,7 @@ from fossil_tracker.db import (
     get_geological_age,
     get_locality,
     get_taxonomy,
+    has_acquisition_documents,
     list_geological_ages,
     list_acquisition_documents,
     list_acquisitions,
@@ -128,7 +129,7 @@ def show_register(db_path: Path) -> None:
     controls = st.columns([2, 1, 1])
     search = controls[0].text_input("Search", placeholder="Collection code, taxon, locality, source")
     confidence = controls[1].selectbox("Ethical confidence", ["All", *CONFIDENCE_OPTIONS])
-    documented_only = controls[2].checkbox("Documentation only")
+    documented_only = controls[2].checkbox("Has documents")
 
     specimens = list_specimens(db_path, search, confidence, documented_only)
     st.metric("Specimens", len(specimens))
@@ -153,7 +154,7 @@ def show_register(db_path: Path) -> None:
             provenance[0].markdown(f"**Source**  \n{_blank(acquisition['source_name'] if acquisition else '')}")
             provenance[1].markdown(f"**Ethical confidence**  \n{_blank(acquisition['ethical_confidence'] if acquisition else '')}")
             provenance[2].markdown(
-                f"**Documentation**  \n{'Available' if acquisition and acquisition['documentation_available'] else 'Not recorded'}"
+                f"**Documents**  \n{'Available' if has_acquisition_documents(specimen['acquisition_id'], db_path) else 'Not recorded'}"
             )
             provenance[3].markdown(
                 f"**Public**  \n{'Yes' if specimen['public_visible'] else 'No'}"
@@ -350,8 +351,6 @@ def show_provenance_manager(db_path: Path) -> None:
         purchase_price = price[0].text_input("Purchase price")
         currency = price[1].text_input("Currency")
         confidence = st.selectbox("Ethical confidence", CONFIDENCE_OPTIONS)
-        documentation_available = st.checkbox("Documentation available")
-        receipt_file = st.text_input("Receipt file")
         provenance_summary = st.text_area("Provenance summary")
         legality_notes = st.text_area("Legality notes")
         notes = st.text_area("Private acquisition notes")
@@ -369,8 +368,6 @@ def show_provenance_manager(db_path: Path) -> None:
                 "provenance_summary": provenance_summary,
                 "legality_notes": legality_notes,
                 "ethical_confidence": confidence,
-                "documentation_available": documentation_available,
-                "receipt_file": receipt_file,
                 "notes": notes,
             },
             db_path,
@@ -660,14 +657,18 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
 
 
 def save_uploaded_image(uploaded_file, specimen: dict) -> str:
-    """Save an uploaded Streamlit file and return a project-relative path."""
+    """Save an uploaded Streamlit file and return its stored path."""
 
-    DEFAULT_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+    storage_dir = image_dir()
+    storage_dir.mkdir(parents=True, exist_ok=True)
     collection_code = safe_filename(str(specimen["collection_code"]))
     original_name = safe_filename(uploaded_file.name)
-    destination = unique_path(DEFAULT_IMAGE_DIR / f"{collection_code}_{original_name}")
+    destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
     destination.write_bytes(uploaded_file.getbuffer())
-    return str(destination.relative_to(PROJECT_ROOT))
+    try:
+        return str(destination.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(destination)
 
 
 def safe_filename(value: str) -> str:

@@ -6,7 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
-from fossil_tracker.config import DEFAULT_DB_PATH, database_path
+from fossil_tracker.config import DEFAULT_DB_PATH, DEFAULT_IMAGE_DIR, database_path, image_dir
 
 
 class ConfigTests(unittest.TestCase):
@@ -25,6 +25,22 @@ class ConfigTests(unittest.TestCase):
     def test_database_path_uses_default_when_environment_variable_is_blank(self) -> None:
         with patch.dict(os.environ, {"FOSSIL_TRACKER_DB": ""}):
             self.assertEqual(database_path(), DEFAULT_DB_PATH)
+
+    def test_image_dir_defaults_to_project_image_path(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(image_dir(), DEFAULT_IMAGE_DIR)
+
+    def test_image_dir_uses_environment_variable_when_set(self) -> None:
+        with patch.dict(os.environ, {"FOSSIL_TRACKER_IMAGES": "/tmp/fossil-images"}):
+            self.assertEqual(str(image_dir()), "/tmp/fossil-images")
+
+    def test_image_dir_expands_user_home(self) -> None:
+        with patch.dict(os.environ, {"FOSSIL_TRACKER_IMAGES": "~/fossil-images"}):
+            self.assertFalse(str(image_dir()).startswith("~"))
+
+    def test_image_dir_uses_default_when_environment_variable_is_blank(self) -> None:
+        with patch.dict(os.environ, {"FOSSIL_TRACKER_IMAGES": ""}):
+            self.assertEqual(image_dir(), DEFAULT_IMAGE_DIR)
 
 
 if __name__ == "__main__":

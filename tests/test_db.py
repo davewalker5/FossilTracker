@@ -92,8 +92,6 @@ CREATE TABLE acquisitions (
     provenance_summary TEXT,
     legality_notes TEXT,
     ethical_confidence TEXT NOT NULL DEFAULT 'Unknown',
-    documentation_available INTEGER NOT NULL DEFAULT 0,
-    receipt_file TEXT,
     notes TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
@@ -298,7 +296,6 @@ class DatabaseTests(unittest.TestCase):
                 "provenance_summary": "Documented purchase.",
                 "legality_notes": "Export status documented.",
                 "ethical_confidence": "High",
-                "documentation_available": True,
             },
             self.db_path,
         )
@@ -325,10 +322,12 @@ class DatabaseTests(unittest.TestCase):
         specimen = db.get_specimen(specimen_id, self.db_path)
         documents = db.list_acquisition_documents(acquisition_id, self.db_path)
         self.assertEqual(acquisition["source_name"], "Example dealer")
-        self.assertEqual(acquisition["documentation_available"], 1)
+        self.assertTrue(db.has_acquisition_documents(acquisition_id, self.db_path))
         self.assertEqual(specimen["acquisition_id"], acquisition_id)
         self.assertEqual(specimen["public_visible"], 1)
         self.assertEqual(documents[0]["id"], document_id)
+        filtered = db.list_specimens(self.db_path, documented_only=True)
+        self.assertEqual([row["id"] for row in filtered], [specimen_id])
 
 
 if __name__ == "__main__":

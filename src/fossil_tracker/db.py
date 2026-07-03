@@ -97,8 +97,6 @@ ACQUISITION_FIELDS = [
     "provenance_summary",
     "legality_notes",
     "ethical_confidence",
-    "documentation_available",
-    "receipt_file",
     "notes",
 ]
 
@@ -189,7 +187,15 @@ def list_specimens(
         params.append(confidence)
 
     if documented_only:
-        clauses.append("acquisitions.documentation_available = 1")
+        clauses.append(
+            """
+            EXISTS (
+                SELECT 1
+                FROM acquisition_documents
+                WHERE acquisition_documents.acquisition_id = specimens.acquisition_id
+            )
+            """
+        )
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
@@ -222,8 +228,6 @@ def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
     _coerce_specimen_foreign_keys(payload)
-    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
-    payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["created_at"] = now
     payload["updated_at"] = now
 
@@ -243,8 +247,6 @@ def update_specimen(specimen_id: int, values: dict[str, Any], db_path: Path | No
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in SPECIMEN_FIELDS}
     _coerce_specimen_foreign_keys(payload)
-    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
-    payload["documentation_available"] = bool(payload.get("documentation_available"))
     payload["updated_at"] = now
     assignments = ", ".join([f"{field} = ?" for field in [*SPECIMEN_FIELDS, "updated_at"]])
 
@@ -297,7 +299,6 @@ def create_acquisition(values: dict[str, Any], db_path: Path | None = None) -> i
 
     payload = _timestamped_payload(ACQUISITION_FIELDS, values)
     payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
-    payload["documentation_available"] = bool(payload.get("documentation_available"))
     return _insert_record(
         "acquisitions",
         [*ACQUISITION_FIELDS, "created_at", "updated_at"],
@@ -323,6 +324,26 @@ def list_acquisition_documents(
                 (acquisition_id,),
             )
         )
+
+
+def has_acquisition_documents(
+    acquisition_id: int | None, db_path: Path | None = None
+) -> bool:
+    """Return whether an acquisition has linked documents."""
+
+    if not acquisition_id:
+        return False
+    with connect(db_path) as connection:
+        row = connection.execute(
+            """
+            SELECT 1
+            FROM acquisition_documents
+            WHERE acquisition_id = ?
+            LIMIT 1
+            """,
+            (acquisition_id,),
+        ).fetchone()
+    return row is not None
 
 
 def create_acquisition_document(
@@ -680,7 +701,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "provenance_summary": "Seed record. Replace with the real acquisition source and documentation.",
             "legality_notes": "Unverified. Confirm export/import status and seller provenance.",
             "ethical_confidence": "Unknown",
-            "documentation_available": False,
         },
         db_path,
     )
@@ -706,7 +726,7 @@ def seed_specimens(db_path: Path | None = None) -> int:
 
 
 def _coerce_csv_value(field: str, value: str | None) -> Any:
-    if field in {"documentation_available", "public_visible"}:
+    if field == "public_visible":
         return str(value).strip().lower() in {"1", "true", "yes", "y"}
     if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"}:
         return _optional_int(value)
@@ -733,8 +753,9 @@ def _insert_record(
             f"INSERT INTO {table} ({', '.join(fields)}) VALUES ({placeholders})",
             [payload[field] for field in fields],
         )
+        record_id = int(cursor.lastrowid)
         connection.commit()
-        return int(cursor.lastrowid)
+    return record_id
 
 
 def _coerce_specimen_foreign_keys(payload: dict[str, Any]) -> None:

@@ -49,6 +49,9 @@ The application is built using:
 - Basic per-specimen image gallery
 - Controlled taxonomy, locality, geological age, and preparation records
 - Specimen links to structured taxonomic and geological context
+- Structured acquisition records for provenance and ethics
+- Acquisition document tracking for receipts and supporting evidence
+- Public/private specimen visibility control
 - SQLite browsing through Datasette
 - CSV import and export for specimen records
 

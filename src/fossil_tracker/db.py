@@ -18,14 +18,8 @@ SPECIMEN_FIELDS = [
     "taxon_id",
     "geological_age_id",
     "locality_id",
-    "acquisition_date",
-    "source",
-    "purchase_price",
-    "currency",
-    "provenance_notes",
-    "legality_ethics_notes",
-    "ethical_confidence",
-    "documentation_available",
+    "acquisition_id",
+    "public_visible",
     "description",
     "measurements",
     "preparation_type_id",
@@ -92,6 +86,29 @@ GEOLOGICAL_AGE_FIELDS = [
 PREPARATION_TYPE_FIELDS = [
     "name",
     "description",
+]
+
+ACQUISITION_FIELDS = [
+    "acquisition_date",
+    "source_name",
+    "source_type",
+    "seller_url",
+    "purchase_price",
+    "currency",
+    "provenance_summary",
+    "legality_notes",
+    "ethical_confidence",
+    "documentation_available",
+    "receipt_file",
+    "notes",
+]
+
+ACQUISITION_DOCUMENT_FIELDS = [
+    "acquisition_id",
+    "document_path",
+    "document_type",
+    "title",
+    "notes",
 ]
 
 
@@ -161,18 +178,19 @@ def list_specimens(
                 OR geological_ages.period LIKE ?
                 OR geological_ages.epoch LIKE ?
                 OR geological_ages.stage LIKE ?
-                OR source LIKE ?
+                OR acquisitions.source_name LIKE ?
+                OR acquisitions.provenance_summary LIKE ?
             )"""
         )
         term = f"%{search.strip()}%"
-        params.extend([term] * 14)
+        params.extend([term] * 15)
 
     if confidence != "All":
-        clauses.append("ethical_confidence = ?")
+        clauses.append("acquisitions.ethical_confidence = ?")
         params.append(confidence)
 
     if documented_only:
-        clauses.append("documentation_available = 1")
+        clauses.append("acquisitions.documentation_available = 1")
 
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     sql = f"""
@@ -181,6 +199,7 @@ def list_specimens(
         LEFT JOIN taxonomy ON taxonomy.id = specimens.taxon_id
         LEFT JOIN localities ON localities.id = specimens.locality_id
         LEFT JOIN geological_ages ON geological_ages.id = specimens.geological_age_id
+        LEFT JOIN acquisitions ON acquisitions.id = specimens.acquisition_id
         {where}
         ORDER BY collection_code COLLATE NOCASE, created_at DESC
     """
@@ -243,6 +262,92 @@ def delete_specimen(specimen_id: int, db_path: Path | None = None) -> None:
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimens WHERE id = ?", (specimen_id,))
+        connection.commit()
+
+
+def list_acquisitions(db_path: Path | None = None) -> list[sqlite3.Row]:
+    """List acquisition/provenance records."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM acquisitions
+                ORDER BY acquisition_date DESC, source_name COLLATE NOCASE, id DESC
+                """
+            )
+        )
+
+
+def get_acquisition(
+    acquisition_id: int | None, db_path: Path | None = None
+) -> sqlite3.Row | None:
+    """Fetch one acquisition record."""
+
+    if not acquisition_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute(
+            "SELECT * FROM acquisitions WHERE id = ?", (acquisition_id,)
+        ).fetchone()
+
+
+def create_acquisition(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create an acquisition record and return its id."""
+
+    payload = _timestamped_payload(ACQUISITION_FIELDS, values)
+    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
+    payload["documentation_available"] = bool(payload.get("documentation_available"))
+    return _insert_record(
+        "acquisitions",
+        [*ACQUISITION_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def list_acquisition_documents(
+    acquisition_id: int, db_path: Path | None = None
+) -> list[sqlite3.Row]:
+    """List documents linked to one acquisition."""
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM acquisition_documents
+                WHERE acquisition_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (acquisition_id,),
+            )
+        )
+
+
+def create_acquisition_document(
+    values: dict[str, Any], db_path: Path | None = None
+) -> int:
+    """Create an acquisition document record and return its id."""
+
+    payload = _timestamped_payload(ACQUISITION_DOCUMENT_FIELDS, values)
+    payload["acquisition_id"] = _optional_int(payload.get("acquisition_id"))
+    return _insert_record(
+        "acquisition_documents",
+        [*ACQUISITION_DOCUMENT_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def delete_acquisition_document(
+    document_id: int, db_path: Path | None = None
+) -> None:
+    """Delete one acquisition document record."""
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM acquisition_documents WHERE id = ?", (document_id,))
         connection.commit()
 
 
@@ -611,6 +716,36 @@ def seed_specimens(db_path: Path | None = None) -> int:
     )
     split_polished_id = _find_preparation_type_id("Split and polished", db_path)
     polished_id = _find_preparation_type_id("Polished", db_path)
+    ammonite_acquisition_id = create_acquisition(
+        {
+            "source_name": "Unrecorded starter entry",
+            "provenance_summary": "Seed record. Replace with the real acquisition source and documentation.",
+            "legality_notes": "Unverified. Confirm export/import status and seller provenance.",
+            "ethical_confidence": "Unknown",
+            "documentation_available": False,
+        },
+        db_path,
+    )
+    orthoceras_acquisition_id = create_acquisition(
+        {
+            "source_name": "Unrecorded starter entry",
+            "provenance_summary": "Seed record. Replace common trade label with documented details where possible.",
+            "legality_notes": "Unverified. Confirm source and export documentation.",
+            "ethical_confidence": "Unknown",
+            "documentation_available": False,
+        },
+        db_path,
+    )
+    placeholder_acquisition_id = create_acquisition(
+        {
+            "source_name": "Placeholder",
+            "provenance_summary": "Only acquire if a genuine, well-documented, ethical specimen is found.",
+            "legality_notes": "Acquisition not yet made.",
+            "ethical_confidence": "Unknown",
+            "documentation_available": False,
+        },
+        db_path,
+    )
 
     starter_records: Iterable[dict[str, Any]] = [
         {
@@ -620,13 +755,10 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "taxon_id": ammonite_taxon_id,
             "geological_age_id": jurassic_age_id,
             "locality_id": madagascar_locality_id,
-            "source": "Unrecorded starter entry",
-            "provenance_notes": "Seed record. Replace with the real acquisition source and documentation.",
-            "legality_ethics_notes": "Unverified. Confirm export/import status and seller provenance.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
+            "acquisition_id": ammonite_acquisition_id,
             "description": "Polished cross-section showing chamber structure.",
             "preparation_type_id": split_polished_id,
+            "public_visible": True,
             "field_notes_links": "Shell morphology",
             "public_notes": "Candidate public summary once provenance is documented.",
         },
@@ -637,11 +769,7 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "taxon_id": orthocone_taxon_id,
             "geological_age_id": palaeozoic_age_id,
             "locality_id": morocco_locality_id,
-            "source": "Unrecorded starter entry",
-            "provenance_notes": "Seed record. Replace common trade label with documented details where possible.",
-            "legality_ethics_notes": "Unverified. Confirm source and export documentation.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
+            "acquisition_id": orthoceras_acquisition_id,
             "description": "Small polished orthocone fossil suitable for morphology notes.",
             "preparation_type_id": polished_id,
             "field_notes_links": "Orthocone modelling",
@@ -652,11 +780,7 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "common_name": "Stromatolite",
             "taxon_id": stromatolite_taxon_id,
             "locality_id": unknown_locality_id,
-            "source": "Placeholder",
-            "provenance_notes": "Only acquire if a genuine, well-documented, ethical specimen is found.",
-            "legality_ethics_notes": "Acquisition not yet made.",
-            "ethical_confidence": "Unknown",
-            "documentation_available": False,
+            "acquisition_id": placeholder_acquisition_id,
             "description": "Placeholder connecting the register to stromatolite growth modelling.",
             "field_notes_links": "Stromatolite growth modelling",
         },
@@ -668,9 +792,9 @@ def seed_specimens(db_path: Path | None = None) -> int:
 
 
 def _coerce_csv_value(field: str, value: str | None) -> Any:
-    if field == "documentation_available":
+    if field in {"documentation_available", "public_visible"}:
         return str(value).strip().lower() in {"1", "true", "yes", "y"}
-    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id"}:
+    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"}:
         return _optional_int(value)
     return value
 
@@ -700,8 +824,9 @@ def _insert_record(
 
 
 def _coerce_specimen_foreign_keys(payload: dict[str, Any]) -> None:
-    for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id"]:
+    for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"]:
         payload[field] = _optional_int(payload.get(field))
+    payload["public_visible"] = bool(payload.get("public_visible"))
 
 
 def _find_geological_age_id(period: str, db_path: Path | None = None) -> int | None:

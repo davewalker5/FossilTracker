@@ -12,6 +12,8 @@ from fossil_tracker.config import APP_NAME, DEFAULT_IMAGE_DIR, PROJECT_ROOT, dat
 from fossil_tracker.db import (
     SPECIMEN_FIELDS,
     apply_migrations,
+    create_acquisition,
+    create_acquisition_document,
     create_geological_age,
     create_locality,
     create_observation,
@@ -19,15 +21,19 @@ from fossil_tracker.db import (
     create_specimen_image,
     create_specimen,
     create_taxonomy,
+    delete_acquisition_document,
     delete_observation,
     delete_specimen_image,
     delete_specimen,
     export_csv,
+    get_acquisition,
     get_specimen,
     get_geological_age,
     get_locality,
     get_taxonomy,
     list_geological_ages,
+    list_acquisition_documents,
+    list_acquisitions,
     list_localities,
     list_observations,
     list_preparation_types,
@@ -51,6 +57,7 @@ PREPARATION_OPTIONS = [
 ]
 IMAGE_TYPE_OPTIONS = ["", "Overall", "Close-up", "Matrix", "Label", "Comparison", "Other"]
 OBSERVATION_TYPE_OPTIONS = ["", "General", "Morphology", "Condition", "Measurement", "Research note", "Other"]
+SOURCE_TYPE_OPTIONS = ["", "Seller", "Collector", "Gift", "Field collection", "Auction", "Unknown", "Other"]
 
 
 def main() -> None:
@@ -94,8 +101,8 @@ def main() -> None:
         )
         export_path.unlink(missing_ok=True)
 
-    tab_register, tab_add, tab_edit, tab_context, tab_notes = st.tabs(
-        ["Register", "Add specimen", "Edit specimen", "Context", "Images and notes"]
+    tab_register, tab_add, tab_edit, tab_context, tab_provenance, tab_notes = st.tabs(
+        ["Register", "Add specimen", "Edit specimen", "Context", "Provenance", "Images and notes"]
     )
 
     with tab_register:
@@ -109,6 +116,9 @@ def main() -> None:
 
     with tab_context:
         show_context_manager(db_path)
+
+    with tab_provenance:
+        show_provenance_manager(db_path)
 
     with tab_notes:
         show_images_and_notes(db_path)
@@ -133,25 +143,29 @@ def show_register(db_path: Path) -> None:
             taxon = get_taxonomy(specimen["taxon_id"], db_path)
             age = get_geological_age(specimen["geological_age_id"], db_path)
             locality = get_locality(specimen["locality_id"], db_path)
+            acquisition = get_acquisition(specimen["acquisition_id"], db_path)
             top = st.columns([1, 1, 1])
             top[0].markdown(f"**Taxon**  \n{_blank(taxonomy_label(taxon))}")
             top[1].markdown(f"**Age**  \n{_blank(geological_age_label(age))}")
             top[2].markdown(f"**Locality**  \n{_blank(locality_label(locality))}")
 
-            provenance = st.columns([1, 1, 1])
-            provenance[0].markdown(f"**Source**  \n{_blank(specimen['source'])}")
-            provenance[1].markdown(f"**Ethical confidence**  \n{_blank(specimen['ethical_confidence'])}")
+            provenance = st.columns([1, 1, 1, 1])
+            provenance[0].markdown(f"**Source**  \n{_blank(acquisition['source_name'] if acquisition else '')}")
+            provenance[1].markdown(f"**Ethical confidence**  \n{_blank(acquisition['ethical_confidence'] if acquisition else '')}")
             provenance[2].markdown(
-                f"**Documentation**  \n{'Available' if specimen['documentation_available'] else 'Not recorded'}"
+                f"**Documentation**  \n{'Available' if acquisition and acquisition['documentation_available'] else 'Not recorded'}"
+            )
+            provenance[3].markdown(
+                f"**Public**  \n{'Yes' if specimen['public_visible'] else 'No'}"
             )
 
             if specimen["description"]:
                 st.markdown("**Description**")
                 st.write(specimen["description"])
-            if specimen["provenance_notes"] or specimen["legality_ethics_notes"]:
+            if acquisition and (acquisition["provenance_summary"] or acquisition["legality_notes"]):
                 st.markdown("**Provenance and ethics**")
-                st.write(specimen["provenance_notes"] or "")
-                st.write(specimen["legality_ethics_notes"] or "")
+                st.write(acquisition["provenance_summary"] or "")
+                st.write(acquisition["legality_notes"] or "")
             if specimen["field_notes_links"]:
                 st.markdown("**Field Notes links**")
                 st.write(specimen["field_notes_links"])
@@ -321,6 +335,82 @@ def show_context_manager(db_path: Path) -> None:
             st.rerun()
 
 
+def show_provenance_manager(db_path: Path) -> None:
+    acquisitions = list_acquisitions(db_path)
+    st.subheader("Acquisitions")
+    render_reference_list([acquisition_label(row) for row in acquisitions])
+
+    with st.form("add-acquisition", clear_on_submit=True):
+        top = st.columns([1, 1, 1])
+        acquisition_date = top[0].text_input("Acquisition date")
+        source_name = top[1].text_input("Source / seller / collector")
+        source_type = top[2].selectbox("Source type", SOURCE_TYPE_OPTIONS)
+        seller_url = st.text_input("Seller URL")
+        price = st.columns([1, 1])
+        purchase_price = price[0].text_input("Purchase price")
+        currency = price[1].text_input("Currency")
+        confidence = st.selectbox("Ethical confidence", CONFIDENCE_OPTIONS)
+        documentation_available = st.checkbox("Documentation available")
+        receipt_file = st.text_input("Receipt file")
+        provenance_summary = st.text_area("Provenance summary")
+        legality_notes = st.text_area("Legality notes")
+        notes = st.text_area("Private acquisition notes")
+        add_acquisition = st.form_submit_button("Add acquisition")
+
+    if add_acquisition:
+        create_acquisition(
+            {
+                "acquisition_date": acquisition_date,
+                "source_name": source_name,
+                "source_type": source_type,
+                "seller_url": seller_url,
+                "purchase_price": purchase_price,
+                "currency": currency,
+                "provenance_summary": provenance_summary,
+                "legality_notes": legality_notes,
+                "ethical_confidence": confidence,
+                "documentation_available": documentation_available,
+                "receipt_file": receipt_file,
+                "notes": notes,
+            },
+            db_path,
+        )
+        st.success("Acquisition added.")
+        st.rerun()
+
+    if not acquisitions:
+        return
+
+    st.subheader("Acquisition documents")
+    choices = {acquisition_label(row): row["id"] for row in acquisitions}
+    selected = st.selectbox("Acquisition", list(choices), key="document-acquisition")
+    acquisition_id = choices[selected]
+    render_acquisition_documents(acquisition_id, db_path)
+    with st.form("add-acquisition-document", clear_on_submit=True):
+        document_path = st.text_input("Document path")
+        document_type = st.text_input("Document type")
+        title = st.text_input("Title")
+        document_notes = st.text_area("Document notes")
+        add_document = st.form_submit_button("Add document")
+
+    if add_document:
+        if not document_path.strip():
+            st.error("Document path is required.")
+            return
+        create_acquisition_document(
+            {
+                "acquisition_id": acquisition_id,
+                "document_path": document_path,
+                "document_type": document_type,
+                "title": title,
+                "notes": document_notes,
+            },
+            db_path,
+        )
+        st.success("Document added.")
+        st.rerun()
+
+
 def show_images_and_notes(db_path: Path) -> None:
     specimens = list_specimens(db_path)
     if not specimens:
@@ -403,6 +493,25 @@ def show_images_and_notes(db_path: Path) -> None:
         st.rerun()
 
 
+def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
+    documents = list_acquisition_documents(acquisition_id, db_path)
+    if not documents:
+        st.info("No acquisition documents recorded.")
+        return
+    for document in documents:
+        label = document["title"] or document["document_path"]
+        with st.expander(label):
+            st.code(document["document_path"], language=None)
+            if document["document_type"]:
+                st.caption(document["document_type"])
+            if document["notes"]:
+                st.write(document["notes"])
+            if st.button("Delete document", key=f"delete-document-{document['id']}"):
+                delete_acquisition_document(document["id"], db_path)
+                st.warning("Document deleted.")
+                st.rerun()
+
+
 def render_specimen_images(
     specimen_id: int, db_path: Path, allow_delete: bool = False
 ) -> None:
@@ -482,6 +591,7 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     geological_age_records = list_geological_ages(db_path)
     locality_records = list_localities(db_path)
     preparation_records = list_preparation_types(db_path)
+    acquisition_records = list_acquisitions(db_path)
 
     context = st.columns([1, 1, 1])
     values["taxon_id"] = context[0].selectbox(
@@ -524,42 +634,22 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
         key=f"{prefix}-preparation-type-id",
     )
 
-    acquisition = st.columns([1, 1, 1, 1])
-    values["acquisition_date"] = acquisition[0].text_input(
-        "Acquisition date", value=data.get("acquisition_date", ""), key=f"{prefix}-acquisition-date"
+    provenance = st.columns([2, 1])
+    values["acquisition_id"] = provenance[0].selectbox(
+        "Acquisition / provenance",
+        record_ids(acquisition_records),
+        format_func=lambda value: record_option_label(value, acquisition_records, acquisition_label),
+        index=record_index(acquisition_records, data.get("acquisition_id")),
+        key=f"{prefix}-acquisition-id",
     )
-    values["source"] = acquisition[1].text_input("Source / seller / collector", value=data.get("source", ""), key=f"{prefix}-source")
-    values["purchase_price"] = acquisition[2].text_input(
-        "Purchase price", value=data.get("purchase_price", ""), key=f"{prefix}-price"
-    )
-    values["currency"] = acquisition[3].text_input("Currency", value=data.get("currency", ""), key=f"{prefix}-currency")
-
-    ethics = st.columns([1, 1])
-    current_confidence = data.get("ethical_confidence", "Unknown") or "Unknown"
-    if current_confidence not in CONFIDENCE_OPTIONS:
-        current_confidence = "Unknown"
-    values["ethical_confidence"] = ethics[0].selectbox(
-        "Ethical confidence",
-        CONFIDENCE_OPTIONS,
-        index=CONFIDENCE_OPTIONS.index(current_confidence),
-        key=f"{prefix}-confidence",
-    )
-    values["documentation_available"] = ethics[1].checkbox(
-        "Documentation available",
-        value=bool(data.get("documentation_available", False)),
-        key=f"{prefix}-documentation",
+    values["public_visible"] = provenance[1].checkbox(
+        "Public record",
+        value=bool(data.get("public_visible", False)),
+        key=f"{prefix}-public-visible",
     )
 
     values["description"] = st.text_area("Description", value=data.get("description", ""), key=f"{prefix}-description")
     values["measurements"] = st.text_input("Measurements", value=data.get("measurements", ""), key=f"{prefix}-measurements")
-    values["provenance_notes"] = st.text_area(
-        "Provenance notes", value=data.get("provenance_notes", ""), key=f"{prefix}-provenance"
-    )
-    values["legality_ethics_notes"] = st.text_area(
-        "Legality / ethical confidence notes",
-        value=data.get("legality_ethics_notes", ""),
-        key=f"{prefix}-legality",
-    )
     values["public_notes"] = st.text_area("Public notes", value=data.get("public_notes", ""), key=f"{prefix}-public")
     values["private_notes"] = st.text_area("Private notes", value=data.get("private_notes", ""), key=f"{prefix}-private")
     values["field_notes_links"] = st.text_area(
@@ -698,6 +788,21 @@ def geological_age_label(age: dict | None) -> str:
     if age["max_ma"] is not None or age["min_ma"] is not None:
         range_label = f" ({_blank(age['max_ma'])}-{_blank(age['min_ma'])} Ma)"
     return f"{label or 'Unnamed age'}{range_label}"
+
+
+def acquisition_label(acquisition: dict | None) -> str:
+    if not acquisition:
+        return ""
+    parts = [
+        acquisition["source_name"],
+        acquisition["source_type"],
+        acquisition["acquisition_date"],
+    ]
+    label = " - ".join(part for part in parts if part)
+    confidence = acquisition["ethical_confidence"]
+    if confidence and confidence != "Unknown":
+        label = f"{label} ({confidence})" if label else confidence
+    return label or "Unnamed acquisition"
 
 
 def _blank(value: object) -> str:

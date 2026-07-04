@@ -9,6 +9,7 @@ from ui.common import (
     save_uploaded_image,
     validate_related_link_url,
 )
+from ui.images import image_date_text
 from ui.provenance import parse_acquisition_date
 
 
@@ -70,3 +71,8 @@ def test_parse_acquisition_date_accepts_iso_dates_only() -> None:
     assert parse_acquisition_date("2026-07-04").isoformat() == "2026-07-04"
     assert parse_acquisition_date("") is None
     assert parse_acquisition_date("04/07/2026") is None
+
+
+def test_image_date_text_formats_optional_date() -> None:
+    assert image_date_text(parse_acquisition_date("2026-07-04")) == "2026-07-04"
+    assert image_date_text(None) == ""

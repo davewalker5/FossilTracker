@@ -17,6 +17,12 @@ from ui.common import (
 )
 
 
+def image_date_text(value: object) -> str:
+    """Return an ISO date string for an optional date picker value."""
+
+    return value.isoformat() if value else ""
+
+
 def show_images_and_notes(db_path: Path) -> None:
     """Render image management for a specimen.
 
@@ -52,7 +58,11 @@ def show_images_and_notes(db_path: Path) -> None:
         image_type = image_meta[0].selectbox("Image type", IMAGE_TYPE_OPTIONS)
         caption = image_meta[1].text_input("Caption")
         photographer = image_meta[2].text_input("Photographer")
-        date_taken = image_meta[3].text_input("Date taken")
+        date_taken = image_meta[3].date_input(
+            "Date taken",
+            value=None,
+            format="YYYY-MM-DD",
+        )
         licence = st.text_input("Licence")
         image_notes = st.text_area("Image notes")
         add_image = st.form_submit_button("Add image")
@@ -72,11 +82,10 @@ def show_images_and_notes(db_path: Path) -> None:
                 "caption": caption,
                 "photographer": photographer,
                 "licence": licence,
-                "date_taken": date_taken,
+                "date_taken": image_date_text(date_taken),
                 "notes": image_notes,
             },
             db_path,
         )
         st.success("Image added.")
         st.rerun()
-

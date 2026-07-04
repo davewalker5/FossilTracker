@@ -403,7 +403,7 @@ def show_context_manager(db_path: Path) -> None:
 
     with preparation_tab:
         st.subheader("Preparation types")
-        render_reference_list([row["name"] for row in list_preparation_types(db_path)])
+        render_preparation_type_table(list_preparation_types(db_path))
         with st.form("add-preparation-type", clear_on_submit=True):
             name = st.text_input("Name")
             description = st.text_area("Description")
@@ -1390,6 +1390,33 @@ def render_locality_table(records: list[dict]) -> None:
             "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
             "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
             "Notes": st.column_config.TextColumn("Notes", width="large"),
+        },
+    )
+
+
+def render_preparation_type_table(records: list[dict]) -> None:
+    """Render preparation type records as a scan-friendly table.
+
+    :param records: Preparation type rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Name": row["name"] or "",
+                "Description": row["description"] or "",
+            }
+            for row in records
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Name": st.column_config.TextColumn("Name", width="medium"),
+            "Description": st.column_config.TextColumn("Description", width="large"),
         },
     )
 

@@ -271,10 +271,12 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     )
     place = st.columns([1, 1, 1])
     locality = get_locality(values["locality_id"], db_path)
+    country_display_key = f"{prefix}-country-display"
+    country_display_value = locality["country"] if locality and locality["country"] else ""
+    st.session_state[country_display_key] = country_display_value
     place[0].text_input(
         "Country / region",
-        value=locality["country"] if locality and locality["country"] else "",
-        key=f"{prefix}-country-display",
+        key=country_display_key,
         disabled=True,
     )
     values["storage_location"] = place[1].text_input(

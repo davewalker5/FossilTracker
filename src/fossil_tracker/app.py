@@ -349,7 +349,6 @@ def show_context_manager(db_path: Path) -> None:
             range_cols = st.columns([1, 1])
             max_ma = range_cols[0].text_input("Max Ma")
             min_ma = range_cols[1].text_input("Min Ma")
-            notes = st.text_area("Notes")
             add_age = st.form_submit_button("Add geological age")
         if add_age:
             create_geological_age(
@@ -360,7 +359,6 @@ def show_context_manager(db_path: Path) -> None:
                     "stage": stage,
                     "max_ma": max_ma,
                     "min_ma": min_ma,
-                    "notes": notes,
                 },
                 db_path,
             )
@@ -1346,7 +1344,6 @@ def render_geological_age_table(records: list[dict]) -> None:
                 "Stage": row["stage"] or "",
                 "Max Ma": row["max_ma"] if row["max_ma"] is not None else "",
                 "Min Ma": row["min_ma"] if row["min_ma"] is not None else "",
-                "Notes": row["notes"] or "",
             }
             for row in records
         ],
@@ -1355,7 +1352,6 @@ def render_geological_age_table(records: list[dict]) -> None:
         column_config={
             "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
             "Min Ma": st.column_config.NumberColumn("Min Ma", format="%.2f"),
-            "Notes": st.column_config.TextColumn("Notes", width="large"),
         },
     )
 

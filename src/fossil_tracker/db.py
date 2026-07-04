@@ -76,7 +76,6 @@ GEOLOGICAL_AGE_FIELDS = [
     "stage",
     "min_ma",
     "max_ma",
-    "notes",
 ]
 
 PREPARATION_TYPE_FIELDS = [

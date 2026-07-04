@@ -64,7 +64,6 @@ CREATE TABLE geological_ages (
     stage TEXT,
     min_ma REAL,
     max_ma REAL,
-    notes TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );

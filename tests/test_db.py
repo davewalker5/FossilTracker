@@ -76,6 +76,15 @@ CREATE TABLE preparation_types (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE licences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    notes TEXT,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE measurement_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -134,8 +143,6 @@ CREATE TABLE observations (
     observation_date TEXT,
     observation_type TEXT,
     notes TEXT NOT NULL,
-    related_project TEXT,
-    related_url TEXT,
     public_visible INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -162,6 +169,10 @@ CREATE TABLE specimen_measurements (
     FOREIGN KEY (measurement_type_id) REFERENCES measurement_types (id),
     UNIQUE (specimen_id, measurement_type_id)
 );
+
+CREATE UNIQUE INDEX idx_specimens_taxon_id_unique
+ON specimens (taxon_id)
+WHERE taxon_id IS NOT NULL;
 """
 
 
@@ -260,8 +271,6 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
             "observation_date": "2026-07-03",
             "observation_type": "Morphology",
             "notes": "**Markdown** observation note.",
-            "related_project": "Shell morphology",
-            "related_url": "https://example.com/project",
             "public_visible": True,
         },
         db_path,
@@ -272,6 +281,24 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
     assert len(images) == 1
     assert images[0]["id"] == image_id
     assert images[0]["caption"] == "Overall view"
+    db.update_specimen_image(
+        image_id,
+        {
+            "specimen_id": specimen_id,
+            "image_path": "data/images/FT-2000.jpg",
+            "image_type": "Close-up",
+            "caption": "Updated close-up",
+            "photographer": "D. Walker",
+            "licence": "CC BY 4.0",
+            "date_taken": "2026-07-04",
+            "notes": "Updated image notes.",
+        },
+        db_path,
+    )
+    updated_images = db.list_specimen_images(specimen_id, db_path)
+    assert updated_images[0]["caption"] == "Updated close-up"
+    assert updated_images[0]["image_type"] == "Close-up"
+    assert updated_images[0]["licence"] == "CC BY 4.0"
     assert len(observations) == 1
     assert observations[0]["id"] == observation_id
     assert observations[0]["notes"] == "**Markdown** observation note."
@@ -376,6 +403,7 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
     assert specimen["locality_id"] == locality_id
     assert specimen["preparation_type_id"] == preparation_type_id
     assert db.get_taxonomy(taxon_id, db_path)["genus"] == "Dactylioceras"
+    assert db.get_taxonomy_for_specimen(specimen_id, db_path)["id"] == taxon_id
     assert db.get_geological_age(age_id, db_path)["period"] == "Jurassic"
     assert db.get_locality(locality_id, db_path)["country"] == "England"
 
@@ -425,6 +453,28 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
     assert db.get_locality(locality_id, db_path)["locality_name"] == "Charmouth"
     preparation_names = [row["name"] for row in db.list_preparation_types(db_path)]
     assert "Prepared and stabilized" in preparation_names
+
+
+def test_taxonomy_record_can_only_be_linked_to_one_specimen(db_path: Path) -> None:
+    taxon_id = db.create_taxonomy({"genus": "Dactylioceras"}, db_path)
+    db.create_specimen(
+        {
+            "collection_code": "FT-3100",
+            "title": "First taxonomy specimen",
+            "taxon_id": taxon_id,
+        },
+        db_path,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_specimen(
+            {
+                "collection_code": "FT-3101",
+                "title": "Second taxonomy specimen",
+                "taxon_id": taxon_id,
+            },
+            db_path,
+        )
 
 
 def test_delete_context_records(db_path: Path) -> None:
@@ -479,6 +529,47 @@ def test_create_update_and_delete_measurement_type(db_path: Path) -> None:
 
     db.delete_measurement_type(measurement_type_id, db_path)
     assert db.list_measurement_types(db_path) == []
+
+
+def test_create_update_and_delete_licence(db_path: Path) -> None:
+    licence_id = db.create_licence(
+        {
+            "name": "CC BY 4.0",
+            "notes": "Attribution required.",
+            "url": "https://creativecommons.org/licenses/by/4.0/",
+        },
+        db_path,
+    )
+
+    licence = db.get_licence(licence_id, db_path)
+    assert licence["name"] == "CC BY 4.0"
+    assert licence["url"] == "https://creativecommons.org/licenses/by/4.0/"
+
+    db.update_licence(
+        licence_id,
+        {
+            "name": "CC BY-SA 4.0",
+            "notes": "Attribution and share-alike required.",
+            "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        },
+        db_path,
+    )
+    updated = db.get_licence(licence_id, db_path)
+    assert updated["name"] == "CC BY-SA 4.0"
+    assert updated["notes"] == "Attribution and share-alike required."
+
+    licences = db.list_licences(db_path)
+    assert [row["id"] for row in licences] == [licence_id]
+
+    db.delete_licence(licence_id, db_path)
+    assert db.get_licence(licence_id, db_path) is None
+    assert db.list_licences(db_path) == []
+
+
+def test_licence_name_is_unique_case_insensitive(db_path: Path) -> None:
+    db.create_licence({"name": "CC0"}, db_path)
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_licence({"name": "cc0"}, db_path)
 
 
 def test_measurement_type_name_is_unique_case_insensitive(db_path: Path) -> None:

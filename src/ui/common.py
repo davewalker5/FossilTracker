@@ -26,7 +26,6 @@ from fossil_tracker.db import (
     list_related_links,
     list_specimen_images,
     list_specimen_measurements,
-    list_taxonomy,
     next_collection_code,
 )
 
@@ -92,10 +91,25 @@ def render_specimen_images(
                 st.caption(details)
             if image["notes"]:
                 st.markdown(image["notes"])
-            if allow_delete and st.button("Delete image", key=f"delete-image-{image['id']}"):
-                delete_specimen_image(image["id"], db_path)
-                st.warning("Image deleted.")
-                st.rerun()
+            if allow_delete:
+                edit_col, delete_col = st.columns([1, 1])
+                if edit_col.button(
+                    "Edit details", key=f"edit-image-{image['id']}", width="stretch"
+                ):
+                    st.session_state["editing_image_id"] = image["id"]
+                    st.rerun()
+                if delete_col.button(
+                    "Delete image", key=f"delete-image-{image['id']}", width="stretch"
+                ):
+                    file_deleted = delete_managed_image_file(image["image_path"])
+                    delete_specimen_image(image["id"], db_path)
+                    if st.session_state.get("editing_image_id") == image["id"]:
+                        st.session_state.pop("editing_image_id", None)
+                    if file_deleted:
+                        st.warning("Image record and uploaded file deleted.")
+                    else:
+                        st.warning("Image record deleted. No managed uploaded file was removed.")
+                    st.rerun()
 
 
 def render_specimen_observations(
@@ -121,13 +135,6 @@ def render_specimen_observations(
             heading = f"{heading} - {observation['observation_date']}"
         with st.expander(heading, expanded=allow_delete):
             st.markdown(observation["notes"])
-            links = []
-            if observation["related_project"]:
-                links.append(observation["related_project"])
-            if observation["related_url"]:
-                links.append(observation["related_url"])
-            if links:
-                st.caption(" | ".join(links))
             st.caption("Public" if observation["public_visible"] else "Private")
             if allow_delete and st.button(
                 "Delete observation", key=f"delete-observation-{observation['id']}"
@@ -153,31 +160,46 @@ def render_specimen_measurements(
             st.info("No measurements recorded for this specimen.")
         return
 
-    st.markdown("**Measurements**")
+    header_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
+    header_columns[0].markdown("**Measurement**")
+    header_columns[1].markdown("**Value**")
+    header_columns[2].markdown("**Unit**")
+    if allow_delete:
+        header_columns[3].markdown("**Action**")
+
     for measurement in measurements:
-        label = (
-            f"{measurement['measurement_name']}: "
-            f"{measurement['value']} {measurement['measurement_unit']}"
-        )
+        row_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
+        row_columns[0].write(measurement["measurement_name"])
+        row_columns[1].write(measurement["value"])
+        row_columns[2].write(measurement["measurement_unit"])
         if allow_delete:
-            value_col, action_col = st.columns([5, 1])
-            value_col.write(label)
-            if action_col.button("Delete", key=f"delete-measurement-{measurement['id']}"):
+            if row_columns[3].button(
+                "Delete", key=f"delete-measurement-{measurement['id']}", width="stretch"
+            ):
                 st.session_state["pending_measurement_delete"] = measurement["id"]
                 st.rerun()
 
             if st.session_state.get("pending_measurement_delete") == measurement["id"]:
+                st.warning(
+                    f"Delete {measurement['measurement_name']} measurement?"
+                )
                 confirm_col, cancel_col = st.columns([1, 1])
-                if confirm_col.button("Confirm delete", key=f"confirm-measurement-{measurement['id']}"):
+                if confirm_col.button(
+                    "Confirm delete",
+                    key=f"confirm-measurement-{measurement['id']}",
+                    width="stretch",
+                ):
                     delete_specimen_measurement(measurement["id"], db_path)
                     st.session_state.pop("pending_measurement_delete", None)
                     st.warning("Measurement deleted.")
                     st.rerun()
-                if cancel_col.button("Cancel", key=f"cancel-measurement-{measurement['id']}"):
+                if cancel_col.button(
+                    "Cancel",
+                    key=f"cancel-measurement-{measurement['id']}",
+                    width="stretch",
+                ):
                     st.session_state.pop("pending_measurement_delete", None)
                     st.rerun()
-        else:
-            st.write(label)
 
 
 def render_related_links(
@@ -243,26 +265,19 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
         "Common name", value=data.get("common_name", ""), key=f"{prefix}-common-name"
     )
 
-    taxonomy_records = list_taxonomy(db_path)
     geological_age_records = list_geological_ages(db_path)
     locality_records = list_localities(db_path)
     preparation_records = list_preparation_types(db_path)
-    context = st.columns([1, 1, 1])
-    values["taxon_id"] = context[0].selectbox(
-        "Taxonomic identification",
-        record_ids(taxonomy_records),
-        format_func=lambda value: record_option_label(value, taxonomy_records, taxonomy_label),
-        index=record_index(taxonomy_records, data.get("taxon_id")),
-        key=f"{prefix}-taxon-id",
-    )
-    values["geological_age_id"] = context[1].selectbox(
+    values["taxon_id"] = data.get("taxon_id", "")
+    context = st.columns([1, 1])
+    values["geological_age_id"] = context[0].selectbox(
         "Geological age / period",
         record_ids(geological_age_records),
         format_func=lambda value: record_option_label(value, geological_age_records, geological_age_label),
         index=record_index(geological_age_records, data.get("geological_age_id")),
         key=f"{prefix}-age-id",
     )
-    values["locality_id"] = context[2].selectbox(
+    values["locality_id"] = context[1].selectbox(
         "Formation or locality",
         record_ids(locality_records),
         format_func=lambda value: record_option_label(value, locality_records, locality_label),
@@ -271,10 +286,12 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     )
     place = st.columns([1, 1, 1])
     locality = get_locality(values["locality_id"], db_path)
+    country_display_key = f"{prefix}-country-display"
+    country_display_value = locality["country"] if locality and locality["country"] else ""
+    st.session_state[country_display_key] = country_display_value
     place[0].text_input(
         "Country / region",
-        value=locality["country"] if locality and locality["country"] else "",
-        key=f"{prefix}-country-display",
+        key=country_display_key,
         disabled=True,
     )
     values["storage_location"] = place[1].text_input(
@@ -382,6 +399,40 @@ def resolve_image_path(image_path: str) -> Path:
     if path.is_absolute():
         return path
     return PROJECT_ROOT / path
+
+
+def managed_image_file_path(image_path: str) -> Path | None:
+    """Return a deletable image path when it is inside the configured image folder.
+
+    :param image_path: Stored relative or absolute image path.
+    :return: Existing file path inside the image folder, or None.
+    """
+
+    path = resolve_image_path(image_path)
+    try:
+        resolved_path = path.resolve(strict=False)
+        resolved_image_dir = image_dir().resolve(strict=False)
+        resolved_path.relative_to(resolved_image_dir)
+    except ValueError:
+        return None
+
+    if resolved_path.is_file():
+        return resolved_path
+    return None
+
+
+def delete_managed_image_file(image_path: str) -> bool:
+    """Delete an image file only when it belongs to the configured image folder.
+
+    :param image_path: Stored relative or absolute image path.
+    :return: Whether a file was deleted.
+    """
+
+    path = managed_image_file_path(image_path)
+    if path is None:
+        return False
+    path.unlink()
+    return True
 
 
 def image_details(image: dict) -> str:
@@ -590,6 +641,35 @@ def render_preparation_type_table(records: list[dict]) -> None:
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),
+        },
+    )
+
+
+def render_licence_table(records: list[dict]) -> None:
+    """Render licence reference records as a scan-friendly table.
+
+    :param records: Licence rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Licence name": row["name"] or "",
+                "Licence URL": row["url"] or "",
+                "Licence notes": row["notes"] or "",
+            }
+            for row in records
+        ],
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Licence name": st.column_config.TextColumn("Licence name", width="medium"),
+            "Licence URL": st.column_config.LinkColumn("Licence URL", width="medium"),
+            "Licence notes": st.column_config.TextColumn("Licence notes", width="large"),
         },
     )
 

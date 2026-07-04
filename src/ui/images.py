@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
 
-from fossil_tracker.db import create_specimen_image, get_specimen, list_specimens
+from fossil_tracker.db import (
+    create_specimen_image,
+    get_specimen,
+    list_licences,
+    list_specimen_images,
+    list_specimens,
+    update_specimen_image,
+)
 from ui.common import (
     IMAGE_TYPE_OPTIONS,
     remember_default_specimen,
@@ -15,6 +23,53 @@ from ui.common import (
     save_uploaded_image,
     specimen_choice_index,
 )
+
+
+def image_date_text(value: object) -> str:
+    """Return an ISO date string for an optional date picker value."""
+
+    return value.isoformat() if value else ""
+
+
+def parse_image_date(value: object) -> date | None:
+    """Parse an image date stored as YYYY-MM-DD text."""
+
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def image_licence_options(licences: list[dict]) -> list[str]:
+    """Return optional image licence choices from reference data."""
+
+    return ["", *[row["name"] for row in licences]]
+
+
+def image_licence_label(value: str) -> str:
+    """Render an optional image licence choice."""
+
+    return value or "Not recorded"
+
+
+def option_with_current(options: list[str], current_value: object) -> list[str]:
+    """Include a stored value in a selectbox option list when needed."""
+
+    current_text = str(current_value or "")
+    if current_text and current_text not in options:
+        return [*options, current_text]
+    return options
+
+
+def option_index(options: list[str], current_value: object) -> int:
+    """Return the selectbox index for an existing value."""
+
+    try:
+        return options.index(str(current_value or ""))
+    except ValueError:
+        return 0
 
 
 def show_images_and_notes(db_path: Path) -> None:
@@ -45,25 +100,115 @@ def show_images_and_notes(db_path: Path) -> None:
 
     st.subheader("Images")
     render_specimen_images(specimen["id"], db_path, allow_delete=True)
-    with st.form("add-image", clear_on_submit=True):
-        uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
-        image_path = st.text_input("Image path")
-        image_meta = st.columns([1, 1, 1, 1])
-        image_type = image_meta[0].selectbox("Image type", IMAGE_TYPE_OPTIONS)
-        caption = image_meta[1].text_input("Caption")
-        photographer = image_meta[2].text_input("Photographer")
-        date_taken = image_meta[3].text_input("Date taken")
-        licence = st.text_input("Licence")
-        image_notes = st.text_area("Image notes")
-        add_image = st.form_submit_button("Add image")
+    images = list_specimen_images(specimen["id"], db_path)
+    editing_image_id = st.session_state.get("editing_image_id")
+    selected_image = next((image for image in images if image["id"] == editing_image_id), None)
+    if editing_image_id and selected_image is None:
+        st.session_state.pop("editing_image_id", None)
 
-    if add_image:
-        stored_path = image_path.strip()
-        if uploaded is not None:
-            stored_path = save_uploaded_image(uploaded, specimen)
-        if not stored_path:
-            st.error("Upload an image or enter an image path.")
+    licence_options = option_with_current(
+        image_licence_options(list_licences(db_path)),
+        selected_image["licence"] if selected_image else "",
+    )
+    image_type_options = option_with_current(
+        IMAGE_TYPE_OPTIONS,
+        selected_image["image_type"] if selected_image else "",
+    )
+    form_suffix = selected_image["id"] if selected_image else "new"
+    stored_date_taken = selected_image["date_taken"] if selected_image else ""
+    date_taken_value = parse_image_date(stored_date_taken)
+
+    if selected_image:
+        st.markdown("**Edit image details**")
+    else:
+        st.markdown("**Add image**")
+
+    with st.form(f"image-form-{form_suffix}", clear_on_submit=selected_image is None):
+        uploaded = None
+        if selected_image is None:
+            uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
+        image_meta = st.columns([1, 1, 1, 1])
+        image_type = image_meta[0].selectbox(
+            "Image type",
+            image_type_options,
+            index=option_index(image_type_options, selected_image["image_type"] if selected_image else ""),
+            key=f"image-type-{form_suffix}",
+        )
+        caption = image_meta[1].text_input(
+            "Caption",
+            value=(selected_image["caption"] or "") if selected_image else "",
+            key=f"image-caption-{form_suffix}",
+        )
+        photographer = image_meta[2].text_input(
+            "Photographer",
+            value=(selected_image["photographer"] or "") if selected_image else "",
+            key=f"image-photographer-{form_suffix}",
+        )
+        date_taken = image_meta[3].date_input(
+            "Date taken",
+            value=date_taken_value,
+            format="YYYY-MM-DD",
+            key=f"image-date-{form_suffix}",
+        )
+        if stored_date_taken and date_taken_value is None:
+            image_meta[3].warning(
+                "Existing date is not in YYYY-MM-DD format. Pick a date to replace it."
+            )
+        licence = st.selectbox(
+            "Licence",
+            licence_options,
+            index=option_index(licence_options, selected_image["licence"] if selected_image else ""),
+            format_func=image_licence_label,
+            key=f"image-licence-{form_suffix}",
+        )
+        image_notes = st.text_area(
+            "Image notes",
+            value=(selected_image["notes"] or "") if selected_image else "",
+            key=f"image-notes-{form_suffix}",
+        )
+        action_col, cancel_col = st.columns([1, 1])
+        save_image = action_col.form_submit_button(
+            "Save image details" if selected_image else "Add image"
+        )
+        cancel_edit = cancel_col.form_submit_button(
+            "Cancel editing", disabled=selected_image is None
+        )
+
+    if cancel_edit:
+        st.session_state.pop("editing_image_id", None)
+        st.rerun()
+
+    if save_image:
+        date_taken_text = (
+            image_date_text(date_taken)
+            if date_taken
+            else str(stored_date_taken or "")
+            if stored_date_taken and date_taken_value is None
+            else ""
+        )
+        if selected_image:
+            update_specimen_image(
+                selected_image["id"],
+                {
+                    "specimen_id": specimen["id"],
+                    "image_path": selected_image["image_path"],
+                    "image_type": image_type,
+                    "caption": caption,
+                    "photographer": photographer,
+                    "licence": licence,
+                    "date_taken": date_taken_text,
+                    "notes": image_notes,
+                },
+                db_path,
+            )
+            st.success("Image details updated.")
+            st.session_state.pop("editing_image_id", None)
+            st.rerun()
+
+        if uploaded is None:
+            st.error("Upload an image.")
             return
+        stored_path = save_uploaded_image(uploaded, specimen)
         create_specimen_image(
             {
                 "specimen_id": specimen["id"],
@@ -72,11 +217,10 @@ def show_images_and_notes(db_path: Path) -> None:
                 "caption": caption,
                 "photographer": photographer,
                 "licence": licence,
-                "date_taken": date_taken,
+                "date_taken": date_taken_text,
                 "notes": image_notes,
             },
             db_path,
         )
         st.success("Image added.")
         st.rerun()
-

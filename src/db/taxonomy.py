@@ -41,6 +41,30 @@ def get_taxonomy(taxon_id: int | None, db_path: Path | None = None) -> sqlite3.R
         return connection.execute("SELECT * FROM taxonomy WHERE id = ?", (taxon_id,)).fetchone()
 
 
+def get_taxonomy_for_specimen(
+    specimen_id: int | None, db_path: Path | None = None
+) -> sqlite3.Row | None:
+    """Fetch the taxonomy record linked to one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Taxonomy row, or None when the specimen has no taxonomy.
+    """
+
+    if not specimen_id:
+        return None
+    with connect(db_path) as connection:
+        return connection.execute(
+            """
+            SELECT taxonomy.*
+            FROM taxonomy
+            JOIN specimens ON specimens.taxon_id = taxonomy.id
+            WHERE specimens.id = ?
+            """,
+            (specimen_id,),
+        ).fetchone()
+
+
 def create_taxonomy(values: dict[str, Any], db_path: Path | None = None) -> int:
     """Create a taxonomy record.
 

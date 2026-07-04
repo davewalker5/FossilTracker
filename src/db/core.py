@@ -39,8 +39,6 @@ OBSERVATION_FIELDS = [
     "observation_date",
     "observation_type",
     "notes",
-    "related_project",
-    "related_url",
     "public_visible",
 ]
 
@@ -80,6 +78,12 @@ GEOLOGICAL_AGE_FIELDS = [
 PREPARATION_TYPE_FIELDS = [
     "name",
     "description",
+]
+
+LICENCE_FIELDS = [
+    "name",
+    "notes",
+    "url",
 ]
 
 MEASUREMENT_TYPE_FIELDS = [

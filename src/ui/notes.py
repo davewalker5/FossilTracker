@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
@@ -14,6 +15,12 @@ from ui.common import (
     render_specimen_observations,
     specimen_choice_index,
 )
+
+
+def observation_date_text(value: date | None) -> str:
+    """Return an ISO date string for an optional observation date."""
+
+    return value.isoformat() if value else ""
 
 
 def show_observation_notes(db_path: Path) -> None:
@@ -45,13 +52,15 @@ def show_observation_notes(db_path: Path) -> None:
     st.subheader("Notes")
     render_specimen_observations(specimen["id"], db_path, allow_delete=True)
     with st.form("add-observation", clear_on_submit=True):
-        observation_meta = st.columns([1, 1, 1])
-        observation_date = observation_meta[0].text_input("Observation date")
+        observation_meta = st.columns([1, 1])
+        observation_date = observation_meta[0].date_input(
+            "Observation date",
+            value=None,
+            format="YYYY-MM-DD",
+        )
         observation_type = observation_meta[1].selectbox(
             "Observation type", OBSERVATION_TYPE_OPTIONS
         )
-        related_project = observation_meta[2].text_input("Related project")
-        related_url = st.text_input("Related URL")
         public_visible = st.checkbox("Public")
         notes = st.text_area("Notes", height=180)
         add_observation = st.form_submit_button("Add observation")
@@ -63,15 +72,12 @@ def show_observation_notes(db_path: Path) -> None:
         create_observation(
             {
                 "specimen_id": specimen["id"],
-                "observation_date": observation_date,
+                "observation_date": observation_date_text(observation_date),
                 "observation_type": observation_type,
                 "notes": notes,
-                "related_project": related_project,
-                "related_url": related_url,
                 "public_visible": public_visible,
             },
             db_path,
         )
         st.success("Observation added.")
         st.rerun()
-

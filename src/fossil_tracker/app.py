@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 import sqlite3
-import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -43,7 +42,6 @@ from fossil_tracker.db import (
     delete_specimen_image,
     delete_specimen,
     delete_taxonomy,
-    export_csv,
     get_acquisition,
     get_specimen,
     get_geological_age,
@@ -107,29 +105,6 @@ def main() -> None:
         if st.button("Add starter records", width="stretch"):
             added = seed_specimens(db_path)
             st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
-        csv_file = st.file_uploader("Import CSV", type=["csv"])
-        if csv_file is not None and st.button("Import uploaded CSV", width="stretch"):
-            # Streamlit uploads are in memory, while the importer expects a filesystem path.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as handle:
-                handle.write(csv_file.getbuffer())
-                temp_path = Path(handle.name)
-            from fossil_tracker.db import import_csv
-
-            count = import_csv(temp_path, db_path)
-            temp_path.unlink(missing_ok=True)
-            st.success(f"Imported {count} record{'s' if count != 1 else ''}.")
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as handle:
-            export_path = Path(handle.name)
-        export_csv(export_path, db_path)
-        st.download_button(
-            "Download CSV export",
-            export_path.read_bytes(),
-            file_name="fossil_tracker_export.csv",
-            mime="text/csv",
-            width="stretch",
-        )
-        export_path.unlink(missing_ok=True)
 
     (
         tab_register,
@@ -1398,7 +1373,7 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
     destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
     destination.write_bytes(uploaded_file.getbuffer())
     try:
-        # Keep default project-local uploads portable in CSV exports and Datasette views.
+        # Keep default project-local uploads portable in Datasette views.
         return str(destination.relative_to(PROJECT_ROOT))
     except ValueError:
         return str(destination)

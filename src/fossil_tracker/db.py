@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1191,46 +1190,6 @@ def delete_related_link(link_id: int, db_path: Path | None = None) -> None:
         connection.commit()
 
 
-def export_csv(destination: Path, db_path: Path | None = None) -> None:
-    """Export the register to CSV for long-term portability.
-
-    :param destination: CSV file path to write.
-    :param db_path: Optional SQLite database path.
-    """
-
-    rows = list_specimens(db_path=db_path)
-    fieldnames = ["id", *SPECIMEN_FIELDS, "created_at", "updated_at"]
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    with destination.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in rows:
-            writer.writerow({field: row[field] for field in fieldnames})
-
-
-def import_csv(source: Path, db_path: Path | None = None) -> int:
-    """Import specimen rows from a CSV file created by Fossil Tracker.
-
-    :param source: CSV file path to read.
-    :param db_path: Optional SQLite database path.
-    :return: Number of imported specimens.
-    """
-
-    count = 0
-    with source.open("r", newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            create_specimen(
-                {
-                    field: _coerce_csv_value(field, row.get(field))
-                    for field in SPECIMEN_FIELDS
-                },
-                db_path=db_path,
-            )
-            count += 1
-    return count
-
-
 def seed_specimens(db_path: Path | None = None) -> int:
     """Create the suggested starter record when the register is empty.
 
@@ -1288,21 +1247,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
         db_path=db_path,
     )
     return 1
-
-
-def _coerce_csv_value(field: str, value: str | None) -> Any:
-    """Convert a CSV string value into the type expected for a specimen field.
-
-    :param field: Specimen field name.
-    :param value: Raw CSV value.
-    :return: Coerced value for database insertion.
-    """
-
-    if field == "public_visible":
-        return str(value).strip().lower() in {"1", "true", "yes", "y"}
-    if field in {"taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"}:
-        return _optional_int(value)
-    return value
 
 
 def _timestamped_payload(fields: list[str], values: dict[str, Any]) -> dict[str, Any]:

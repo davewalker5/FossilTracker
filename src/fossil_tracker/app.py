@@ -153,7 +153,7 @@ def main() -> None:
             "Notes",
             "Measurements",
             "Related links",
-            "Context",
+            "Reference Data",
         ]
     )
 

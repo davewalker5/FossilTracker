@@ -198,6 +198,34 @@ def test_create_and_filter_specimen(db_path: Path) -> None:
     assert len(filtered) == 1
 
 
+def test_next_collection_code_uses_next_ft_number(db_path: Path) -> None:
+    assert db.next_collection_code(db_path) == "FT-0001"
+
+    db.create_specimen(
+        {
+            "collection_code": "FT-0001",
+            "title": "First specimen",
+        },
+        db_path,
+    )
+    db.create_specimen(
+        {
+            "collection_code": "FT-0010",
+            "title": "Tenth specimen",
+        },
+        db_path,
+    )
+    db.create_specimen(
+        {
+            "collection_code": "OTHER-9999",
+            "title": "Other collection",
+        },
+        db_path,
+    )
+
+    assert db.next_collection_code(db_path) == "FT-0011"
+
+
 def test_seed_only_when_empty(db_path: Path) -> None:
     assert db.seed_specimens(db_path) == 1
     assert db.seed_specimens(db_path) == 0

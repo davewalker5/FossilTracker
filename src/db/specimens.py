@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
@@ -111,6 +112,30 @@ def get_specimen(specimen_id: int, db_path: Path | None = None) -> sqlite3.Row |
         return connection.execute(
             "SELECT * FROM specimens WHERE id = ?", (specimen_id,)
         ).fetchone()
+
+
+def next_collection_code(db_path: Path | None = None, prefix: str = "FT") -> str:
+    """Return the next collection code for the configured prefix.
+
+    :param db_path: Optional SQLite database path.
+    :param prefix: Collection code prefix.
+    :return: Next collection code in prefix-NNNN format.
+    """
+
+    pattern = re.compile(rf"^{re.escape(prefix)}-(\d+)$")
+    highest = 0
+    with connect(db_path) as connection:
+        rows = connection.execute(
+            "SELECT collection_code FROM specimens WHERE collection_code LIKE ?",
+            (f"{prefix}-%",),
+        )
+
+        for row in rows:
+            match = pattern.match(row["collection_code"] or "")
+            if match:
+                highest = max(highest, int(match.group(1)))
+
+    return f"{prefix}-{highest + 1:04d}"
 
 
 def create_specimen(values: dict[str, Any], db_path: Path | None = None) -> int:

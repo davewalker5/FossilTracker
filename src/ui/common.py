@@ -28,6 +28,7 @@ from fossil_tracker.db import (
     list_specimen_images,
     list_specimen_measurements,
     list_taxonomy,
+    next_collection_code,
 )
 
 CONFIDENCE_OPTIONS = ["Unknown", "Low", "Medium", "High"]
@@ -240,10 +241,13 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
 
     data = dict(specimen or {})
     values: dict[str, object] = {}
+    collection_code = data.get("collection_code", "")
+    if not specimen:
+        collection_code = next_collection_code(db_path)
 
     basic = st.columns([1, 2, 1])
     values["collection_code"] = basic[0].text_input(
-        "Collection code", value=data.get("collection_code", ""), key=f"{prefix}-collection-code"
+        "Collection code", value=collection_code, key=f"{prefix}-collection-code"
     )
     values["title"] = basic[1].text_input("Title", value=data.get("title", ""), key=f"{prefix}-title")
     values["common_name"] = basic[2].text_input(
@@ -851,5 +855,4 @@ def _blank(value: object) -> str:
     """
 
     return str(value) if value else "Not recorded"
-
 

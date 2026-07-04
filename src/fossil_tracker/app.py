@@ -428,6 +428,7 @@ def show_measurement_type_manager(db_path: Path) -> None:
 
     measurement_types = list_measurement_types(db_path)
     st.subheader("Measurement types")
+    render_measurement_type_table(measurement_types)
 
     choices = {"New measurement type": None}
     choices.update({f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types})
@@ -1416,6 +1417,36 @@ def render_preparation_type_table(records: list[dict]) -> None:
         hide_index=True,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
+            "Description": st.column_config.TextColumn("Description", width="large"),
+        },
+    )
+
+
+def render_measurement_type_table(records: list[dict]) -> None:
+    """Render measurement type records as a scan-friendly table.
+
+    :param records: Measurement type rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Name": row["name"] or "",
+                "Unit": row["unit"] or "",
+                "Description": row["description"] or "",
+                "Active": "Yes" if row["active"] else "No",
+            }
+            for row in records
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Name": st.column_config.TextColumn("Name", width="medium"),
+            "Unit": st.column_config.TextColumn("Unit", width="small"),
             "Description": st.column_config.TextColumn("Description", width="large"),
         },
     )

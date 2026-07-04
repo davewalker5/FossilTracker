@@ -305,7 +305,7 @@ def show_context_manager(db_path: Path) -> None:
 
     with taxonomy_tab:
         st.subheader("Taxonomy")
-        render_reference_list([taxonomy_label(row) for row in list_taxonomy(db_path)])
+        render_taxonomy_table(list_taxonomy(db_path))
         with st.form("add-taxonomy", clear_on_submit=True):
             tax_cols = st.columns([1, 1, 1, 1])
             kingdom = tax_cols[0].text_input("Kingdom", value="Animalia")
@@ -1288,6 +1288,42 @@ def render_reference_list(labels: list[str]) -> None:
         st.write(label)
     if len(labels) > 25:
         st.caption(f"{len(labels) - 25} more records not shown.")
+
+
+def render_taxonomy_table(records: list[dict]) -> None:
+    """Render taxonomy records as a scan-friendly table.
+
+    :param records: Taxonomy rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Scientific name": " ".join(
+                    part for part in [row["genus"], row["species"]] if part
+                )
+                or "",
+                "Kingdom": row["kingdom"] or "",
+                "Phylum": row["phylum"] or "",
+                "Class": row["class_name"] or "",
+                "Order": row["order_name"] or "",
+                "Family": row["family"] or "",
+                "Confidence": row["identification_confidence"] or "",
+                "Notes": row["identification_notes"] or "",
+            }
+            for row in records
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Scientific name": st.column_config.TextColumn("Scientific name", width="medium"),
+            "Notes": st.column_config.TextColumn("Notes", width="large"),
+        },
+    )
 
 
 def record_ids(records: list[dict]) -> list[int | None]:

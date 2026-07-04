@@ -339,7 +339,7 @@ def show_context_manager(db_path: Path) -> None:
 
     with ages_tab:
         st.subheader("Geological ages")
-        render_reference_list([geological_age_label(row) for row in list_geological_ages(db_path)])
+        render_geological_age_table(list_geological_ages(db_path))
         with st.form("add-geological-age", clear_on_submit=True):
             age_cols = st.columns([1, 1, 1, 1])
             era = age_cols[0].text_input("Era")
@@ -1321,6 +1321,39 @@ def render_taxonomy_table(records: list[dict]) -> None:
         hide_index=True,
         column_config={
             "Scientific name": st.column_config.TextColumn("Scientific name", width="medium"),
+            "Notes": st.column_config.TextColumn("Notes", width="large"),
+        },
+    )
+
+
+def render_geological_age_table(records: list[dict]) -> None:
+    """Render geological age records as a scan-friendly table.
+
+    :param records: Geological age rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Era": row["era"] or "",
+                "Period": row["period"] or "",
+                "Epoch": row["epoch"] or "",
+                "Stage": row["stage"] or "",
+                "Max Ma": row["max_ma"] if row["max_ma"] is not None else "",
+                "Min Ma": row["min_ma"] if row["min_ma"] is not None else "",
+                "Notes": row["notes"] or "",
+            }
+            for row in records
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
+            "Min Ma": st.column_config.NumberColumn("Min Ma", format="%.2f"),
             "Notes": st.column_config.TextColumn("Notes", width="large"),
         },
     )

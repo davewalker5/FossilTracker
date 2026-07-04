@@ -109,13 +109,23 @@ def main() -> None:
         )
         export_path.unlink(missing_ok=True)
 
-    tab_register, tab_add, tab_edit, tab_provenance, tab_notes, tab_links, tab_context = st.tabs(
+    (
+        tab_register,
+        tab_add,
+        tab_edit,
+        tab_provenance,
+        tab_images,
+        tab_observations,
+        tab_links,
+        tab_context,
+    ) = st.tabs(
         [
             "Register",
             "Add specimen",
             "Edit specimen",
             "Provenance",
-            "Images and notes",
+            "Images",
+            "Observation notes",
             "Related links",
             "Context",
         ]
@@ -136,8 +146,11 @@ def main() -> None:
     with tab_provenance:
         show_provenance_manager(db_path)
 
-    with tab_notes:
+    with tab_images:
         show_images_and_notes(db_path)
+
+    with tab_observations:
+        show_observation_notes(db_path)
 
     with tab_links:
         show_related_links(db_path)
@@ -458,14 +471,14 @@ def show_provenance_manager(db_path: Path) -> None:
 
 
 def show_images_and_notes(db_path: Path) -> None:
-    """Render image and observation management for a specimen.
+    """Render image management for a specimen.
 
     :param db_path: SQLite database path.
     """
 
     specimens = list_specimens(db_path)
     if not specimens:
-        st.info("Add a specimen before attaching images or notes.")
+        st.info("Add a specimen before attaching images.")
         return
 
     choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
@@ -519,6 +532,33 @@ def show_images_and_notes(db_path: Path) -> None:
         )
         st.success("Image added.")
         st.rerun()
+
+
+def show_observation_notes(db_path: Path) -> None:
+    """Render observation note management for a specimen.
+
+    :param db_path: SQLite database path.
+    """
+
+    specimens = list_specimens(db_path)
+    if not specimens:
+        st.info("Add a specimen before adding observation notes.")
+        return
+
+    choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
+    selected_label = st.selectbox(
+        "Specimen",
+        list(choices),
+        index=specimen_choice_index(specimens),
+        key="observation-specimen",
+        on_change=remember_selected_specimen,
+        args=("observation-specimen", choices),
+    )
+    remember_default_specimen(selected_label, choices)
+    specimen = get_specimen(choices[selected_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
 
     st.subheader("Observation notes")
     render_specimen_observations(specimen["id"], db_path, allow_delete=True)

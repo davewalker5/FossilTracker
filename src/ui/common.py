@@ -160,31 +160,46 @@ def render_specimen_measurements(
             st.info("No measurements recorded for this specimen.")
         return
 
-    st.markdown("**Measurements**")
+    header_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
+    header_columns[0].markdown("**Measurement**")
+    header_columns[1].markdown("**Value**")
+    header_columns[2].markdown("**Unit**")
+    if allow_delete:
+        header_columns[3].markdown("**Action**")
+
     for measurement in measurements:
-        label = (
-            f"{measurement['measurement_name']}: "
-            f"{measurement['value']} {measurement['measurement_unit']}"
-        )
+        row_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
+        row_columns[0].write(measurement["measurement_name"])
+        row_columns[1].write(measurement["value"])
+        row_columns[2].write(measurement["measurement_unit"])
         if allow_delete:
-            value_col, action_col = st.columns([5, 1])
-            value_col.write(label)
-            if action_col.button("Delete", key=f"delete-measurement-{measurement['id']}"):
+            if row_columns[3].button(
+                "Delete", key=f"delete-measurement-{measurement['id']}", width="stretch"
+            ):
                 st.session_state["pending_measurement_delete"] = measurement["id"]
                 st.rerun()
 
             if st.session_state.get("pending_measurement_delete") == measurement["id"]:
+                st.warning(
+                    f"Delete {measurement['measurement_name']} measurement?"
+                )
                 confirm_col, cancel_col = st.columns([1, 1])
-                if confirm_col.button("Confirm delete", key=f"confirm-measurement-{measurement['id']}"):
+                if confirm_col.button(
+                    "Confirm delete",
+                    key=f"confirm-measurement-{measurement['id']}",
+                    width="stretch",
+                ):
                     delete_specimen_measurement(measurement["id"], db_path)
                     st.session_state.pop("pending_measurement_delete", None)
                     st.warning("Measurement deleted.")
                     st.rerun()
-                if cancel_col.button("Cancel", key=f"cancel-measurement-{measurement['id']}"):
+                if cancel_col.button(
+                    "Cancel",
+                    key=f"cancel-measurement-{measurement['id']}",
+                    width="stretch",
+                ):
                     st.session_state.pop("pending_measurement_delete", None)
                     st.rerun()
-        else:
-            st.write(label)
 
 
 def render_related_links(

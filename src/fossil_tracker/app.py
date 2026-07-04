@@ -369,7 +369,7 @@ def show_context_manager(db_path: Path) -> None:
 
     with localities_tab:
         st.subheader("Localities")
-        render_reference_list([locality_label(row) for row in list_localities(db_path)])
+        render_locality_table(list_localities(db_path))
         with st.form("add-locality", clear_on_submit=True):
             loc_cols = st.columns([1, 1, 1])
             locality_name = loc_cols[0].text_input("Locality name")
@@ -1354,6 +1354,41 @@ def render_geological_age_table(records: list[dict]) -> None:
         column_config={
             "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
             "Min Ma": st.column_config.NumberColumn("Min Ma", format="%.2f"),
+            "Notes": st.column_config.TextColumn("Notes", width="large"),
+        },
+    )
+
+
+def render_locality_table(records: list[dict]) -> None:
+    """Render locality records as a scan-friendly table.
+
+    :param records: Locality rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Locality": row["locality_name"] or "",
+                "Formation": row["formation"] or "",
+                "Member": row["member"] or "",
+                "Region": row["region"] or "",
+                "Country": row["country"] or "",
+                "Latitude": row["latitude"] if row["latitude"] is not None else "",
+                "Longitude": row["longitude"] if row["longitude"] is not None else "",
+                "Precision": row["locality_precision"] or "",
+                "Notes": row["locality_notes"] or "",
+            }
+            for row in records
+        ],
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
+            "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
             "Notes": st.column_config.TextColumn("Notes", width="large"),
         },
     )

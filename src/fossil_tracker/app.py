@@ -104,11 +104,11 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Database")
         st.code(str(db_path), language=None)
-        if st.button("Add starter records", use_container_width=True):
+        if st.button("Add starter records", width="stretch"):
             added = seed_specimens(db_path)
             st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
         csv_file = st.file_uploader("Import CSV", type=["csv"])
-        if csv_file is not None and st.button("Import uploaded CSV", use_container_width=True):
+        if csv_file is not None and st.button("Import uploaded CSV", width="stretch"):
             # Streamlit uploads are in memory, while the importer expects a filesystem path.
             with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as handle:
                 handle.write(csv_file.getbuffer())
@@ -127,7 +127,7 @@ def main() -> None:
             export_path.read_bytes(),
             file_name="fossil_tracker_export.csv",
             mime="text/csv",
-            use_container_width=True,
+            width="stretch",
         )
         export_path.unlink(missing_ok=True)
 
@@ -255,8 +255,8 @@ def show_edit_form(db_path: Path) -> None:
     with st.form("edit-specimen"):
         values = specimen_inputs("edit", specimen, db_path)
         left, right = st.columns([1, 1])
-        save = left.form_submit_button("Save changes", use_container_width=True)
-        remove = right.form_submit_button("Delete specimen", use_container_width=True)
+        save = left.form_submit_button("Save changes", width="stretch")
+        remove = right.form_submit_button("Delete specimen", width="stretch")
 
     if save:
         if not values["collection_code"] or not values["title"]:
@@ -1584,7 +1584,7 @@ def render_taxonomy_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Scientific name": st.column_config.TextColumn("Scientific name", width="medium"),
@@ -1615,7 +1615,7 @@ def render_geological_age_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
@@ -1649,7 +1649,7 @@ def render_locality_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
@@ -1677,7 +1677,7 @@ def render_preparation_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
@@ -1705,7 +1705,7 @@ def render_measurement_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),

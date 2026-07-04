@@ -350,6 +350,75 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
         self.assertEqual(db.get_locality(locality_id, self.db_path)["country"], "England")
 
+        db.update_taxonomy(
+            taxon_id,
+            {
+                "kingdom": "Animalia",
+                "phylum": "Mollusca",
+                "class_name": "Cephalopoda",
+                "genus": "Hildoceras",
+                "species": "bifrons",
+                "identification_confidence": "High",
+            },
+            self.db_path,
+        )
+        db.update_geological_age(
+            age_id,
+            {
+                "era": "Mesozoic",
+                "period": "Jurassic",
+                "epoch": "Early Jurassic",
+                "max_ma": "201.4",
+                "min_ma": "174.7",
+            },
+            self.db_path,
+        )
+        db.update_locality(
+            locality_id,
+            {
+                "locality_name": "Charmouth",
+                "formation": "Charmouth Mudstone Formation",
+                "region": "Dorset",
+                "country": "England",
+                "latitude": "50.738",
+                "longitude": "-2.902",
+            },
+            self.db_path,
+        )
+        db.update_preparation_type(
+            preparation_type_id,
+            {"name": "Prepared and stabilized", "description": "Updated preparation."},
+            self.db_path,
+        )
+
+        self.assertEqual(db.get_taxonomy(taxon_id, self.db_path)["genus"], "Hildoceras")
+        self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
+        self.assertEqual(db.get_locality(locality_id, self.db_path)["locality_name"], "Charmouth")
+        preparation_names = [row["name"] for row in db.list_preparation_types(self.db_path)]
+        self.assertIn("Prepared and stabilized", preparation_names)
+
+    def test_delete_context_records(self) -> None:
+        taxon_id = db.create_taxonomy({"identification_notes": "Temporary taxon"}, self.db_path)
+        age_id = db.create_geological_age({"period": "Temporary period"}, self.db_path)
+        locality_id = db.create_locality({"locality_name": "Temporary locality"}, self.db_path)
+        preparation_type_id = db.create_preparation_type(
+            {"name": "Temporary preparation"},
+            self.db_path,
+        )
+
+        db.delete_taxonomy(taxon_id, self.db_path)
+        db.delete_geological_age(age_id, self.db_path)
+        db.delete_locality(locality_id, self.db_path)
+        db.delete_preparation_type(preparation_type_id, self.db_path)
+
+        self.assertIsNone(db.get_taxonomy(taxon_id, self.db_path))
+        self.assertIsNone(db.get_geological_age(age_id, self.db_path))
+        self.assertIsNone(db.get_locality(locality_id, self.db_path))
+        self.assertNotIn(
+            preparation_type_id,
+            [row["id"] for row in db.list_preparation_types(self.db_path)],
+        )
+
     def test_create_update_and_delete_measurement_type(self) -> None:
         measurement_type_id = db.create_measurement_type(
             {

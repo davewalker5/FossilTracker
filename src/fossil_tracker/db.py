@@ -524,6 +524,40 @@ def create_taxonomy(values: dict[str, Any], db_path: Path | None = None) -> int:
     return _insert_record("taxonomy", [*TAXONOMY_FIELDS, "created_at", "updated_at"], payload, db_path)
 
 
+def update_taxonomy(
+    taxon_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update a taxonomy record.
+
+    :param taxon_id: Taxonomy primary key.
+    :param values: Taxonomy field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(TAXONOMY_FIELDS, values)
+    payload["identification_confidence"] = payload.get("identification_confidence") or "Unknown"
+    assignments = ", ".join([f"{field} = ?" for field in [*TAXONOMY_FIELDS, "updated_at"]])
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE taxonomy SET {assignments} WHERE id = ?",
+            [payload[field] for field in TAXONOMY_FIELDS] + [payload["updated_at"], taxon_id],
+        )
+        connection.commit()
+
+
+def delete_taxonomy(taxon_id: int, db_path: Path | None = None) -> None:
+    """Delete one taxonomy record.
+
+    :param taxon_id: Taxonomy primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM taxonomy WHERE id = ?", (taxon_id,))
+        connection.commit()
+
+
 def list_localities(db_path: Path | None = None) -> list[sqlite3.Row]:
     """List locality records.
 
@@ -569,6 +603,41 @@ def create_locality(values: dict[str, Any], db_path: Path | None = None) -> int:
     payload["latitude"] = _optional_float(payload.get("latitude"))
     payload["longitude"] = _optional_float(payload.get("longitude"))
     return _insert_record("localities", [*LOCALITY_FIELDS, "created_at", "updated_at"], payload, db_path)
+
+
+def update_locality(
+    locality_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update a locality record.
+
+    :param locality_id: Locality primary key.
+    :param values: Locality field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(LOCALITY_FIELDS, values)
+    payload["latitude"] = _optional_float(payload.get("latitude"))
+    payload["longitude"] = _optional_float(payload.get("longitude"))
+    assignments = ", ".join([f"{field} = ?" for field in [*LOCALITY_FIELDS, "updated_at"]])
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE localities SET {assignments} WHERE id = ?",
+            [payload[field] for field in LOCALITY_FIELDS] + [payload["updated_at"], locality_id],
+        )
+        connection.commit()
+
+
+def delete_locality(locality_id: int, db_path: Path | None = None) -> None:
+    """Delete one locality record.
+
+    :param locality_id: Locality primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM localities WHERE id = ?", (locality_id,))
+        connection.commit()
 
 
 def list_geological_ages(db_path: Path | None = None) -> list[sqlite3.Row]:
@@ -627,6 +696,44 @@ def create_geological_age(values: dict[str, Any], db_path: Path | None = None) -
     )
 
 
+def update_geological_age(
+    geological_age_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update a geological age record.
+
+    :param geological_age_id: Geological age primary key.
+    :param values: Geological age field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(GEOLOGICAL_AGE_FIELDS, values)
+    payload["min_ma"] = _optional_float(payload.get("min_ma"))
+    payload["max_ma"] = _optional_float(payload.get("max_ma"))
+    assignments = ", ".join([f"{field} = ?" for field in [*GEOLOGICAL_AGE_FIELDS, "updated_at"]])
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE geological_ages SET {assignments} WHERE id = ?",
+            [payload[field] for field in GEOLOGICAL_AGE_FIELDS]
+            + [payload["updated_at"], geological_age_id],
+        )
+        connection.commit()
+
+
+def delete_geological_age(
+    geological_age_id: int, db_path: Path | None = None
+) -> None:
+    """Delete one geological age record.
+
+    :param geological_age_id: Geological age primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM geological_ages WHERE id = ?", (geological_age_id,))
+        connection.commit()
+
+
 def list_preparation_types(db_path: Path | None = None) -> list[sqlite3.Row]:
     """List controlled preparation types.
 
@@ -661,6 +768,44 @@ def create_preparation_type(values: dict[str, Any], db_path: Path | None = None)
         payload,
         db_path,
     )
+
+
+def update_preparation_type(
+    preparation_type_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update a preparation type.
+
+    :param preparation_type_id: Preparation type primary key.
+    :param values: Preparation type field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(PREPARATION_TYPE_FIELDS, values)
+    assignments = ", ".join(
+        [f"{field} = ?" for field in [*PREPARATION_TYPE_FIELDS, "updated_at"]]
+    )
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE preparation_types SET {assignments} WHERE id = ?",
+            [payload[field] for field in PREPARATION_TYPE_FIELDS]
+            + [payload["updated_at"], preparation_type_id],
+        )
+        connection.commit()
+
+
+def delete_preparation_type(
+    preparation_type_id: int, db_path: Path | None = None
+) -> None:
+    """Delete one preparation type.
+
+    :param preparation_type_id: Preparation type primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM preparation_types WHERE id = ?", (preparation_type_id,))
+        connection.commit()
 
 
 def list_measurement_types(db_path: Path | None = None) -> list[sqlite3.Row]:

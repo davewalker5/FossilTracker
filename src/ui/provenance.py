@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 
 import streamlit as st
@@ -22,6 +23,17 @@ from ui.common import (
     remember_selected_specimen,
     specimen_choice_index,
 )
+
+
+def parse_acquisition_date(value: object) -> date | None:
+    """Parse an acquisition date stored as YYYY-MM-DD text."""
+
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        return None
 
 
 def show_provenance_manager(db_path: Path) -> None:
@@ -55,15 +67,22 @@ def show_provenance_manager(db_path: Path) -> None:
     acquisition = get_acquisition(specimen["acquisition_id"], db_path)
     data = dict(acquisition or {})
     widget_suffix = f"{specimen['id']}-{data.get('id', 'new')}"
+    stored_acquisition_date = data.get("acquisition_date", "")
+    acquisition_date_value = parse_acquisition_date(stored_acquisition_date)
 
     st.subheader("Provenance")
     with st.form(f"provenance-form-{widget_suffix}"):
         top = st.columns([1, 1, 1])
-        acquisition_date = top[0].text_input(
+        acquisition_date = top[0].date_input(
             "Acquisition date",
-            value=data.get("acquisition_date", ""),
+            value=acquisition_date_value,
             key=f"provenance-date-{widget_suffix}",
+            format="YYYY-MM-DD",
         )
+        if stored_acquisition_date and acquisition_date_value is None:
+            top[0].warning(
+                "Existing date is not in YYYY-MM-DD format. Pick a date to replace it."
+            )
         source_name = top[1].text_input(
             "Source / seller / collector",
             value=data.get("source_name", ""),
@@ -115,8 +134,15 @@ def show_provenance_manager(db_path: Path) -> None:
         save_acquisition = st.form_submit_button("Save provenance")
 
     if save_acquisition:
+        acquisition_date_text = (
+            acquisition_date.isoformat()
+            if acquisition_date
+            else str(stored_acquisition_date or "")
+            if stored_acquisition_date and acquisition_date_value is None
+            else ""
+        )
         values = {
-            "acquisition_date": acquisition_date,
+            "acquisition_date": acquisition_date_text,
             "source_name": source_name,
             "source_type": source_type,
             "seller_url": seller_url,
@@ -137,4 +163,3 @@ def show_provenance_manager(db_path: Path) -> None:
             update_acquisition(acquisition["id"], values, db_path)
             st.success("Provenance updated.")
         st.rerun()
-

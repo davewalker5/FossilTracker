@@ -9,6 +9,7 @@ from ui.common import (
     save_uploaded_image,
     validate_related_link_url,
 )
+from ui.provenance import parse_acquisition_date
 
 
 class UploadedFile:
@@ -63,3 +64,9 @@ def test_validate_related_link_url_rejects_empty_and_incomplete_urls() -> None:
         == "URL cannot contain spaces."
     )
     assert validate_related_link_url("https://fieldnotes.example/page") is None
+
+
+def test_parse_acquisition_date_accepts_iso_dates_only() -> None:
+    assert parse_acquisition_date("2026-07-04").isoformat() == "2026-07-04"
+    assert parse_acquisition_date("") is None
+    assert parse_acquisition_date("04/07/2026") is None

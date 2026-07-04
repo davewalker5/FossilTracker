@@ -66,7 +66,6 @@ def show_images_and_notes(db_path: Path) -> None:
     licence_options = image_licence_options(list_licences(db_path))
     with st.form("add-image", clear_on_submit=True):
         uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
-        image_path = st.text_input("Image path")
         image_meta = st.columns([1, 1, 1, 1])
         image_type = image_meta[0].selectbox("Image type", IMAGE_TYPE_OPTIONS)
         caption = image_meta[1].text_input("Caption")
@@ -85,12 +84,10 @@ def show_images_and_notes(db_path: Path) -> None:
         add_image = st.form_submit_button("Add image")
 
     if add_image:
-        stored_path = image_path.strip()
-        if uploaded is not None:
-            stored_path = save_uploaded_image(uploaded, specimen)
-        if not stored_path:
-            st.error("Upload an image or enter an image path.")
+        if uploaded is None:
+            st.error("Upload an image.")
             return
+        stored_path = save_uploaded_image(uploaded, specimen)
         create_specimen_image(
             {
                 "specimen_id": specimen["id"],

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sqlite3
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
@@ -23,6 +24,7 @@ from fossil_tracker.db import (
     create_acquisition_document,
     create_geological_age,
     create_locality,
+    create_measurement_type,
     create_observation,
     create_preparation_type,
     create_related_link,
@@ -30,6 +32,7 @@ from fossil_tracker.db import (
     create_specimen,
     create_taxonomy,
     delete_acquisition_document,
+    delete_measurement_type,
     delete_observation,
     delete_related_link,
     delete_specimen_image,
@@ -43,8 +46,8 @@ from fossil_tracker.db import (
     has_acquisition_documents,
     list_geological_ages,
     list_acquisition_documents,
-    list_acquisitions,
     list_localities,
+    list_measurement_types,
     list_observations,
     list_preparation_types,
     list_related_links,
@@ -53,6 +56,7 @@ from fossil_tracker.db import (
     list_taxonomy,
     seed_specimens,
     update_acquisition,
+    update_measurement_type,
     update_specimen,
 )
 
@@ -287,8 +291,8 @@ def show_context_manager(db_path: Path) -> None:
     :param db_path: SQLite database path.
     """
 
-    taxonomy_tab, ages_tab, localities_tab, preparation_tab = st.tabs(
-        ["Taxonomy", "Geological ages", "Localities", "Preparation types"]
+    taxonomy_tab, ages_tab, localities_tab, preparation_tab, measurement_tab = st.tabs(
+        ["Taxonomy", "Geological ages", "Localities", "Preparation types", "Measurement types"]
     )
 
     with taxonomy_tab:
@@ -403,6 +407,87 @@ def show_context_manager(db_path: Path) -> None:
             create_preparation_type({"name": name, "description": description}, db_path)
             st.success("Preparation type added.")
             st.rerun()
+
+    with measurement_tab:
+        show_measurement_type_manager(db_path)
+
+
+def show_measurement_type_manager(db_path: Path) -> None:
+    """Render measurement type reference data management.
+
+    :param db_path: SQLite database path.
+    """
+
+    measurement_types = list_measurement_types(db_path)
+    st.subheader("Measurement types")
+
+    choices = {"New measurement type": None}
+    choices.update({f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types})
+    selected = st.selectbox("Measurement type", list(choices), key="measurement-type-select")
+    selected_id = choices[selected]
+    selected_row = next((row for row in measurement_types if row["id"] == selected_id), None)
+
+    with st.form(f"measurement-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
+        form_cols = st.columns([2, 1, 1])
+        name = form_cols[0].text_input(
+            "Name",
+            value=selected_row["name"] if selected_row else "",
+            key=f"measurement-type-name-{selected_id or 'new'}",
+        )
+        unit = form_cols[1].text_input(
+            "Unit",
+            value=selected_row["unit"] if selected_row else "",
+            key=f"measurement-type-unit-{selected_id or 'new'}",
+        )
+        active = form_cols[2].checkbox(
+            "Active",
+            value=bool(selected_row["active"]) if selected_row else True,
+            key=f"measurement-type-active-{selected_id or 'new'}",
+        )
+        description = st.text_area(
+            "Description",
+            value=selected_row["description"] if selected_row and selected_row["description"] else "",
+            key=f"measurement-type-description-{selected_id or 'new'}",
+        )
+        save_col, delete_col = st.columns([1, 1])
+        save_measurement_type = save_col.form_submit_button("Save measurement type")
+        remove_measurement_type = delete_col.form_submit_button(
+            "Delete measurement type", disabled=selected_row is None
+        )
+
+    if save_measurement_type:
+        if not name.strip():
+            st.error("Measurement type name is required.")
+            return
+        if not unit.strip():
+            st.error("Measurement type unit is required.")
+            return
+        try:
+            values = {
+                "name": name.strip(),
+                "unit": unit.strip(),
+                "description": description,
+                "active": active,
+            }
+            if selected_row is None:
+                create_measurement_type(values, db_path)
+                st.success("Measurement type added.")
+            else:
+                update_measurement_type(selected_row["id"], values, db_path)
+                st.success("Measurement type updated.")
+        except sqlite3.IntegrityError:
+            st.error("A measurement type with that name already exists.")
+            return
+        st.rerun()
+
+    if remove_measurement_type and selected_row is not None:
+        try:
+            delete_measurement_type(selected_row["id"], db_path)
+        except sqlite3.IntegrityError:
+            st.error("This measurement type is in use and cannot be deleted.")
+            return
+        st.warning("Measurement type deleted.")
+        st.rerun()
 
 
 def show_provenance_manager(db_path: Path) -> None:
@@ -925,8 +1010,6 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     geological_age_records = list_geological_ages(db_path)
     locality_records = list_localities(db_path)
     preparation_records = list_preparation_types(db_path)
-    acquisition_records = list_acquisitions(db_path)
-
     context = st.columns([1, 1, 1])
     values["taxon_id"] = context[0].selectbox(
         "Taxonomic identification",
@@ -968,15 +1051,8 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
         key=f"{prefix}-preparation-type-id",
     )
 
-    provenance = st.columns([2, 1])
-    values["acquisition_id"] = provenance[0].selectbox(
-        "Acquisition / provenance",
-        record_ids(acquisition_records),
-        format_func=lambda value: record_option_label(value, acquisition_records, acquisition_label),
-        index=record_index(acquisition_records, data.get("acquisition_id")),
-        key=f"{prefix}-acquisition-id",
-    )
-    values["public_visible"] = provenance[1].checkbox(
+    values["acquisition_id"] = data.get("acquisition_id", "")
+    values["public_visible"] = st.checkbox(
         "Public record",
         value=bool(data.get("public_visible", False)),
         key=f"{prefix}-public-visible",

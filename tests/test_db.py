@@ -78,6 +78,16 @@ CREATE TABLE preparation_types (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE measurement_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    unit TEXT NOT NULL,
+    description TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE acquisitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     acquisition_date TEXT,
@@ -329,6 +339,47 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(db.get_taxonomy(taxon_id, self.db_path)["genus"], "Dactylioceras")
         self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
         self.assertEqual(db.get_locality(locality_id, self.db_path)["country"], "England")
+
+    def test_create_update_and_delete_measurement_type(self) -> None:
+        measurement_type_id = db.create_measurement_type(
+            {
+                "name": "Umbilicus Diameter",
+                "unit": "mm",
+                "description": "Ammonite umbilicus diameter.",
+            },
+            self.db_path,
+        )
+
+        measurement_type = db.get_measurement_type(measurement_type_id, self.db_path)
+        self.assertEqual(measurement_type["name"], "Umbilicus Diameter")
+        self.assertEqual(measurement_type["unit"], "mm")
+        self.assertEqual(measurement_type["active"], 1)
+
+        db.update_measurement_type(
+            measurement_type_id,
+            {
+                "name": "Umbilicus Width",
+                "unit": "mm",
+                "description": "Updated description.",
+                "active": False,
+            },
+            self.db_path,
+        )
+        updated = db.get_measurement_type(measurement_type_id, self.db_path)
+        self.assertEqual(updated["name"], "Umbilicus Width")
+        self.assertEqual(updated["description"], "Updated description.")
+        self.assertEqual(updated["active"], 0)
+
+        measurement_types = db.list_measurement_types(self.db_path)
+        self.assertEqual([row["id"] for row in measurement_types], [measurement_type_id])
+
+        db.delete_measurement_type(measurement_type_id, self.db_path)
+        self.assertEqual(db.list_measurement_types(self.db_path), [])
+
+    def test_measurement_type_name_is_unique_case_insensitive(self) -> None:
+        db.create_measurement_type({"name": "Length", "unit": "mm"}, self.db_path)
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.create_measurement_type({"name": "length", "unit": "mm"}, self.db_path)
 
     def test_create_acquisition_and_document_records(self) -> None:
         acquisition_id = db.create_acquisition(

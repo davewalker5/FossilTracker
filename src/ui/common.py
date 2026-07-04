@@ -317,11 +317,11 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
 
 
 def save_uploaded_image(uploaded_file, specimen: dict) -> str:
-    """Save an uploaded Streamlit file and return its stored path.
+    """Save an uploaded Streamlit file and return its stored filename.
 
     :param uploaded_file: Streamlit uploaded file object.
     :param specimen: Specimen row used for the filename prefix.
-    :return: Project-relative path when possible, otherwise absolute path.
+    :return: Image filename stored in the configured image folder.
     """
 
     storage_dir = image_dir()
@@ -330,11 +330,7 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
     original_name = safe_filename(uploaded_file.name)
     destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
     destination.write_bytes(uploaded_file.getbuffer())
-    try:
-        # Keep default project-local uploads portable in Datasette views.
-        return str(destination.relative_to(PROJECT_ROOT))
-    except ValueError:
-        return str(destination)
+    return destination.name
 
 
 def save_uploaded_document(uploaded_file, specimen: dict) -> str:
@@ -391,13 +387,15 @@ def unique_path(path: Path) -> Path:
 def resolve_image_path(image_path: str) -> Path:
     """Resolve a stored image path for display.
 
-    :param image_path: Stored relative or absolute image path.
+    :param image_path: Stored image filename, or legacy relative/absolute image path.
     :return: Absolute image path.
     """
 
     path = Path(image_path).expanduser()
     if path.is_absolute():
         return path
+    if path.parent == Path("."):
+        return image_dir() / path
     return PROJECT_ROOT / path
 
 

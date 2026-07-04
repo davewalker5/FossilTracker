@@ -7,6 +7,7 @@ from pathlib import Path
 from fossil_tracker.config import PROJECT_ROOT
 from ui.common import (
     delete_managed_image_file,
+    resolve_image_path,
     save_uploaded_document,
     save_uploaded_image,
     validate_related_link_url,
@@ -41,11 +42,22 @@ def test_save_uploaded_image_uses_configured_image_folder(tmp_path: Path, monkey
         {"collection_code": "FT-0001"},
     )
 
-    path = Path(stored_path)
-    assert path.is_absolute()
+    assert stored_path == "FT-0001_overall-view.jpg"
+    path = image_folder / stored_path
     assert path.parent == image_folder
-    assert path.name == "FT-0001_overall-view.jpg"
     assert path.read_bytes() == b"image-bytes"
+
+
+def test_resolve_image_path_uses_configured_image_folder_for_filename(
+    tmp_path: Path, monkeypatch
+) -> None:
+    image_folder = tmp_path / "images"
+    monkeypatch.setenv("FOSSIL_TRACKER_IMAGES", str(image_folder))
+
+    assert (
+        resolve_image_path("FT-0001_overall-view.jpg")
+        == image_folder / "FT-0001_overall-view.jpg"
+    )
 
 
 def test_save_uploaded_document_uses_configured_document_folder(tmp_path: Path, monkeypatch) -> None:
@@ -74,6 +86,19 @@ def test_delete_managed_image_file_removes_configured_image_file(
     image_path.write_bytes(b"image-bytes")
 
     assert delete_managed_image_file(str(image_path))
+    assert not image_path.exists()
+
+
+def test_delete_managed_image_file_handles_stored_filename(
+    tmp_path: Path, monkeypatch
+) -> None:
+    image_folder = tmp_path / "images"
+    monkeypatch.setenv("FOSSIL_TRACKER_IMAGES", str(image_folder))
+    image_folder.mkdir()
+    image_path = image_folder / "FT-0001.jpg"
+    image_path.write_bytes(b"image-bytes")
+
+    assert delete_managed_image_file("FT-0001.jpg")
     assert not image_path.exists()
 
 

@@ -144,7 +144,7 @@ def main() -> None:
         tab_context,
     ) = st.tabs(
         [
-            "Register",
+            "Search",
             "Add specimen",
             "Edit specimen",
             "Provenance",
@@ -194,12 +194,12 @@ def show_register(db_path: Path) -> None:
     :param db_path: SQLite database path.
     """
 
-    controls = st.columns([2, 1, 1])
-    search = controls[0].text_input("Search", placeholder="Collection code, taxon, locality, source")
-    confidence = controls[1].selectbox("Ethical confidence", ["All", *CONFIDENCE_OPTIONS])
-    documented_only = controls[2].checkbox("Has documents")
+    search = st.text_input("Search", placeholder="Please enter a search term")
+    if not search.strip():
+        st.info("Enter a search term to search specimens.")
+        return
 
-    specimens = list_specimens(db_path, search, confidence, documented_only)
+    specimens = list_specimens(db_path, search)
     st.metric("Specimens", len(specimens))
 
     if not specimens:

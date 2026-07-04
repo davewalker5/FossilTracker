@@ -20,7 +20,6 @@ CREATE TABLE specimens (
     acquisition_id INTEGER,
     public_visible INTEGER NOT NULL DEFAULT 0,
     description TEXT,
-    measurements TEXT,
     preparation_type_id INTEGER,
     storage_location TEXT,
     created_at TEXT NOT NULL,
@@ -152,6 +151,18 @@ CREATE TABLE specimen_related_links (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
+);
+
+CREATE TABLE specimen_measurements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    specimen_id INTEGER NOT NULL,
+    measurement_type_id INTEGER NOT NULL,
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE,
+    FOREIGN KEY (measurement_type_id) REFERENCES measurement_types (id),
+    UNIQUE (specimen_id, measurement_type_id)
 );
 """
 
@@ -380,6 +391,62 @@ class DatabaseTests(unittest.TestCase):
         db.create_measurement_type({"name": "Length", "unit": "mm"}, self.db_path)
         with self.assertRaises(sqlite3.IntegrityError):
             db.create_measurement_type({"name": "length", "unit": "mm"}, self.db_path)
+
+    def test_create_specimen_measurements_and_cascade_delete(self) -> None:
+        specimen_id = db.create_specimen(
+            {
+                "collection_code": "FT-3500",
+                "title": "Measured specimen",
+            },
+            self.db_path,
+        )
+        measurement_type_id = db.create_measurement_type(
+            {
+                "name": "Length",
+                "unit": "mm",
+            },
+            self.db_path,
+        )
+        measurement_id = db.create_specimen_measurement(
+            {
+                "specimen_id": specimen_id,
+                "measurement_type_id": measurement_type_id,
+                "value": "43.2",
+            },
+            self.db_path,
+        )
+
+        measurements = db.list_specimen_measurements(specimen_id, self.db_path)
+        self.assertEqual(len(measurements), 1)
+        self.assertEqual(measurements[0]["id"], measurement_id)
+        self.assertEqual(measurements[0]["measurement_name"], "Length")
+        self.assertEqual(measurements[0]["measurement_unit"], "mm")
+        self.assertEqual(measurements[0]["value"], "43.2")
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            db.create_specimen_measurement(
+                {
+                    "specimen_id": specimen_id,
+                    "measurement_type_id": measurement_type_id,
+                    "value": "44.0",
+                },
+                self.db_path,
+            )
+
+        db.delete_specimen_measurement(measurement_id, self.db_path)
+        self.assertEqual(db.list_specimen_measurements(specimen_id, self.db_path), [])
+
+        measurement_id = db.create_specimen_measurement(
+            {
+                "specimen_id": specimen_id,
+                "measurement_type_id": measurement_type_id,
+                "value": "43.2",
+            },
+            self.db_path,
+        )
+        self.assertIsInstance(measurement_id, int)
+        db.delete_specimen(specimen_id, self.db_path)
+        self.assertEqual(db.list_specimen_measurements(specimen_id, self.db_path), [])
 
     def test_create_acquisition_and_document_records(self) -> None:
         acquisition_id = db.create_acquisition(

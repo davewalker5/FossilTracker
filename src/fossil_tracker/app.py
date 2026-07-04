@@ -28,6 +28,7 @@ from fossil_tracker.db import (
     create_observation,
     create_preparation_type,
     create_related_link,
+    create_specimen_measurement,
     create_specimen_image,
     create_specimen,
     create_taxonomy,
@@ -35,6 +36,7 @@ from fossil_tracker.db import (
     delete_measurement_type,
     delete_observation,
     delete_related_link,
+    delete_specimen_measurement,
     delete_specimen_image,
     delete_specimen,
     export_csv,
@@ -51,6 +53,7 @@ from fossil_tracker.db import (
     list_observations,
     list_preparation_types,
     list_related_links,
+    list_specimen_measurements,
     list_specimen_images,
     list_specimens,
     list_taxonomy,
@@ -128,6 +131,7 @@ def main() -> None:
         tab_documents,
         tab_images,
         tab_observations,
+        tab_measurements,
         tab_links,
         tab_context,
     ) = st.tabs(
@@ -139,6 +143,7 @@ def main() -> None:
             "Documents",
             "Images",
             "Notes",
+            "Measurements",
             "Related links",
             "Context",
         ]
@@ -167,6 +172,9 @@ def main() -> None:
 
     with tab_observations:
         show_observation_notes(db_path)
+
+    with tab_measurements:
+        show_measurements(db_path)
 
     with tab_links:
         show_related_links(db_path)
@@ -844,6 +852,67 @@ def show_related_links(db_path: Path) -> None:
         st.rerun()
 
 
+def show_measurements(db_path: Path) -> None:
+    """Render standard measurement management for a specimen.
+
+    :param db_path: SQLite database path.
+    """
+
+    specimens = list_specimens(db_path)
+    if not specimens:
+        st.info("Add a specimen before recording measurements.")
+        return
+
+    choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
+    selected_label = st.selectbox(
+        "Specimen",
+        list(choices),
+        index=specimen_choice_index(specimens),
+        key="measurements-specimen",
+        on_change=remember_selected_specimen,
+        args=("measurements-specimen", choices),
+    )
+    remember_default_specimen(selected_label, choices)
+    specimen = get_specimen(choices[selected_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
+
+    st.subheader("Measurements")
+    render_specimen_measurements(specimen["id"], db_path, allow_delete=True)
+
+    measurement_types = [row for row in list_measurement_types(db_path) if row["active"]]
+    if not measurement_types:
+        st.info("Add an active measurement type in Context before recording measurements.")
+        return
+
+    type_choices = {f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types}
+    with st.form("add-specimen-measurement", clear_on_submit=True):
+        measurement_type_label = st.selectbox("Measurement type", list(type_choices))
+        value = st.text_input("Value")
+        add_measurement = st.form_submit_button("Add measurement")
+
+    if add_measurement:
+        cleaned_value = value.strip()
+        if not cleaned_value:
+            st.error("Measurement value is required.")
+            return
+        try:
+            create_specimen_measurement(
+                {
+                    "specimen_id": specimen["id"],
+                    "measurement_type_id": type_choices[measurement_type_label],
+                    "value": cleaned_value,
+                },
+                db_path,
+            )
+        except sqlite3.IntegrityError:
+            st.error("This specimen already has that measurement type.")
+            return
+        st.success("Measurement added.")
+        st.rerun()
+
+
 def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
     """Render documents linked to one acquisition.
 
@@ -944,6 +1013,49 @@ def render_specimen_observations(
                 delete_observation(observation["id"], db_path)
                 st.warning("Observation deleted.")
                 st.rerun()
+
+
+def render_specimen_measurements(
+    specimen_id: int, db_path: Path, allow_delete: bool = False
+) -> None:
+    """Render measurements linked to one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: SQLite database path.
+    :param allow_delete: Whether delete controls should be shown.
+    """
+
+    measurements = list_specimen_measurements(specimen_id, db_path)
+    if not measurements:
+        if allow_delete:
+            st.info("No measurements recorded for this specimen.")
+        return
+
+    st.markdown("**Measurements**")
+    for measurement in measurements:
+        label = (
+            f"{measurement['measurement_name']}: "
+            f"{measurement['value']} {measurement['measurement_unit']}"
+        )
+        if allow_delete:
+            value_col, action_col = st.columns([5, 1])
+            value_col.write(label)
+            if action_col.button("Delete", key=f"delete-measurement-{measurement['id']}"):
+                st.session_state["pending_measurement_delete"] = measurement["id"]
+                st.rerun()
+
+            if st.session_state.get("pending_measurement_delete") == measurement["id"]:
+                confirm_col, cancel_col = st.columns([1, 1])
+                if confirm_col.button("Confirm delete", key=f"confirm-measurement-{measurement['id']}"):
+                    delete_specimen_measurement(measurement["id"], db_path)
+                    st.session_state.pop("pending_measurement_delete", None)
+                    st.warning("Measurement deleted.")
+                    st.rerun()
+                if cancel_col.button("Cancel", key=f"cancel-measurement-{measurement['id']}"):
+                    st.session_state.pop("pending_measurement_delete", None)
+                    st.rerun()
+        else:
+            st.write(label)
 
 
 def render_related_links(
@@ -1059,7 +1171,6 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     )
 
     values["description"] = st.text_area("Description", value=data.get("description", ""), key=f"{prefix}-description")
-    values["measurements"] = st.text_input("Measurements", value=data.get("measurements", ""), key=f"{prefix}-measurements")
     return {field: values.get(field, "") for field in SPECIMEN_FIELDS}
 
 

@@ -39,8 +39,6 @@ OBSERVATION_FIELDS = [
     "observation_date",
     "observation_type",
     "notes",
-    "related_project",
-    "related_url",
     "public_visible",
 ]
 

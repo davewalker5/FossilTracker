@@ -136,13 +136,6 @@ def render_specimen_observations(
             heading = f"{heading} - {observation['observation_date']}"
         with st.expander(heading, expanded=allow_delete):
             st.markdown(observation["notes"])
-            links = []
-            if observation["related_project"]:
-                links.append(observation["related_project"])
-            if observation["related_url"]:
-                links.append(observation["related_url"])
-            if links:
-                st.caption(" | ".join(links))
             st.caption("Public" if observation["public_visible"] else "Private")
             if allow_delete and st.button(
                 "Delete observation", key=f"delete-observation-{observation['id']}"

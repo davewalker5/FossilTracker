@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from fossil_tracker.config import APP_NAME, database_path
-from fossil_tracker.db import apply_migrations, seed_specimens
+from fossil_tracker.db import apply_migrations, get_specimen, list_specimens, seed_specimens
 from ui.add_specimen import show_add_form
 from ui.documents import show_acquisition_documents
 from ui.edit_specimen import show_edit_form
@@ -17,6 +17,47 @@ from ui.reference_data import show_context_manager
 from ui.related_links import show_related_links
 from ui.search import show_register
 from ui.taxonomy import show_taxonomy_manager
+
+
+SPECIMEN_REQUIRED_TABS = {
+    "Edit specimen",
+    "Taxonomy",
+    "Provenance",
+    "Documents",
+    "Images",
+    "Notes",
+    "Measurements",
+    "Related links",
+}
+
+
+def selected_specimen_exists(db_path) -> bool:
+    """Return whether the current session specimen id points to an existing specimen."""
+
+    current_id = st.session_state.get("current_specimen_id")
+    if current_id in {None, ""}:
+        return False
+    try:
+        specimen_id = int(current_id)
+    except (TypeError, ValueError):
+        st.session_state.pop("current_specimen_id", None)
+        return False
+
+    if get_specimen(specimen_id, db_path) is not None:
+        return True
+
+    st.session_state.pop("current_specimen_id", None)
+    return False
+
+
+def show_specimen_required_fallback(db_path) -> None:
+    """Render useful content when a specimen-specific tab is opened too early."""
+
+    st.info("Select or add a specimen before using this tab.")
+    if list_specimens(db_path):
+        show_register(db_path)
+    else:
+        show_add_form(db_path)
 
 
 def main() -> None:
@@ -58,6 +99,8 @@ def main() -> None:
     if pending_main_tab in main_tab_labels:
         st.session_state["main_tabs"] = pending_main_tab
 
+    selected_specimen_available = selected_specimen_exists(db_path)
+
     (
         tab_register,
         tab_add,
@@ -86,11 +129,17 @@ def main() -> None:
 
     if tab_edit.open:
         with tab_edit:
-            show_edit_form(db_path)
+            if selected_specimen_available:
+                show_edit_form(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_taxonomy.open:
         with tab_taxonomy:
-            show_taxonomy_manager(db_path)
+            if selected_specimen_available:
+                show_taxonomy_manager(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_context.open:
         with tab_context:
@@ -98,27 +147,45 @@ def main() -> None:
 
     if tab_provenance.open:
         with tab_provenance:
-            show_provenance_manager(db_path)
+            if selected_specimen_available:
+                show_provenance_manager(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_documents.open:
         with tab_documents:
-            show_acquisition_documents(db_path)
+            if selected_specimen_available:
+                show_acquisition_documents(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_images.open:
         with tab_images:
-            show_images_and_notes(db_path)
+            if selected_specimen_available:
+                show_images_and_notes(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_observations.open:
         with tab_observations:
-            show_observation_notes(db_path)
+            if selected_specimen_available:
+                show_observation_notes(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_measurements.open:
         with tab_measurements:
-            show_measurements(db_path)
+            if selected_specimen_available:
+                show_measurements(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
     if tab_links.open:
         with tab_links:
-            show_related_links(db_path)
+            if selected_specimen_available:
+                show_related_links(db_path)
+            else:
+                show_specimen_required_fallback(db_path)
 
 
 if __name__ == "__main__":

@@ -45,6 +45,7 @@ def show_add_form(db_path: Path) -> None:
             st.error("Collection code and title are required.")
             return
         specimen_id = create_specimen(values, db_path)
+        st.session_state["current_specimen_id"] = specimen_id
         st.session_state["add_specimen_success"] = f"Added specimen #{specimen_id}."
         st.session_state["clear_add_specimen_form"] = True
         st.rerun()

@@ -1,10 +1,10 @@
 services:
   fossiltracker:
-    container_name: platelibrary
+    container_name: fossiltracker
     image: davewalker5/fossiltracker:latest
     platform: linux/amd64
     restart: always
     ports:
       - "8095:8501"
     volumes:
-      - /path/to/plate/library/database/folder:/var/opt/fossiltracker/
+      - /path/to/fossil/tracker/database/folder:/var/opt/fossiltracker/

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
-import tempfile
-import unittest
 from pathlib import Path
+
+import pytest
 
 from fossil_tracker import db
 
@@ -165,417 +165,445 @@ CREATE TABLE specimen_measurements (
 """
 
 
-class DatabaseTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.db_path = Path(self.temp_dir.name) / "test.sqlite3"
-        with sqlite3.connect(self.db_path) as connection:
-            connection.executescript(SCHEMA)
+@pytest.fixture
+def db_path(tmp_path: Path) -> Path:
+    path = tmp_path / "test.sqlite3"
+    with sqlite3.connect(path) as connection:
+        connection.executescript(SCHEMA)
+    return path
 
-    def tearDown(self) -> None:
-        self.temp_dir.cleanup()
 
-    def test_create_and_filter_specimen(self) -> None:
-        taxon_id = db.create_taxonomy(
-            {
-                "identification_notes": "Ammonoidea",
-                "identification_confidence": "High",
-            },
-            self.db_path,
-        )
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-1000",
-                "title": "Test ammonite",
-                "taxon_id": taxon_id,
-            },
-            self.db_path,
-        )
+def test_create_and_filter_specimen(db_path: Path) -> None:
+    taxon_id = db.create_taxonomy(
+        {
+            "identification_notes": "Ammonoidea",
+            "identification_confidence": "High",
+        },
+        db_path,
+    )
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-1000",
+            "title": "Test ammonite",
+            "taxon_id": taxon_id,
+        },
+        db_path,
+    )
 
-        specimen = db.get_specimen(specimen_id, self.db_path)
-        self.assertIsNotNone(specimen)
-        self.assertEqual(specimen["collection_code"], "FT-1000")
+    specimen = db.get_specimen(specimen_id, db_path)
+    assert specimen is not None
+    assert specimen["collection_code"] == "FT-1000"
 
-        filtered = db.list_specimens(self.db_path, search="ammonite")
-        self.assertEqual(len(filtered), 1)
+    filtered = db.list_specimens(db_path, search="ammonite")
+    assert len(filtered) == 1
 
-    def test_seed_only_when_empty(self) -> None:
-        self.assertEqual(db.seed_specimens(self.db_path), 1)
-        self.assertEqual(db.seed_specimens(self.db_path), 0)
-        self.assertEqual(db.specimen_count(self.db_path), 1)
 
-    def test_create_image_and_observation_records(self) -> None:
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-2000",
-                "title": "Image and notes test",
-            },
-            self.db_path,
-        )
+def test_next_collection_code_uses_next_ft_number(db_path: Path) -> None:
+    assert db.next_collection_code(db_path) == "FT-0001"
 
-        image_id = db.create_specimen_image(
-            {
-                "specimen_id": specimen_id,
-                "image_path": "data/images/FT-2000.jpg",
-                "image_type": "Overall",
-                "caption": "Overall view",
-                "photographer": "D. Walker",
-                "licence": "Private",
-                "date_taken": "2026-07-03",
-                "notes": "Shows the complete specimen.",
-            },
-            self.db_path,
-        )
-        observation_id = db.create_observation(
-            {
-                "specimen_id": specimen_id,
-                "observation_date": "2026-07-03",
-                "observation_type": "Morphology",
-                "notes": "**Markdown** observation note.",
-                "related_project": "Shell morphology",
-                "related_url": "https://example.com/project",
-                "public_visible": True,
-            },
-            self.db_path,
-        )
+    db.create_specimen(
+        {
+            "collection_code": "FT-0001",
+            "title": "First specimen",
+        },
+        db_path,
+    )
+    db.create_specimen(
+        {
+            "collection_code": "FT-0010",
+            "title": "Tenth specimen",
+        },
+        db_path,
+    )
+    db.create_specimen(
+        {
+            "collection_code": "OTHER-9999",
+            "title": "Other collection",
+        },
+        db_path,
+    )
 
-        images = db.list_specimen_images(specimen_id, self.db_path)
-        observations = db.list_observations(specimen_id, self.db_path)
-        self.assertEqual(len(images), 1)
-        self.assertEqual(images[0]["id"], image_id)
-        self.assertEqual(images[0]["caption"], "Overall view")
-        self.assertEqual(len(observations), 1)
-        self.assertEqual(observations[0]["id"], observation_id)
-        self.assertEqual(observations[0]["notes"], "**Markdown** observation note.")
-        self.assertEqual(observations[0]["public_visible"], 1)
+    assert db.next_collection_code(db_path) == "FT-0011"
 
-        db.delete_specimen_image(image_id, self.db_path)
-        db.delete_observation(observation_id, self.db_path)
-        self.assertEqual(db.list_specimen_images(specimen_id, self.db_path), [])
-        self.assertEqual(db.list_observations(specimen_id, self.db_path), [])
 
-    def test_create_related_links_and_cascade_delete(self) -> None:
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-2500",
-                "title": "Related links test",
-            },
-            self.db_path,
-        )
-        first_link_id = db.create_related_link(
-            {
-                "specimen_id": specimen_id,
-                "url": "https://fieldnotes.example/first",
-            },
-            self.db_path,
-        )
-        db.create_related_link(
-            {
-                "specimen_id": specimen_id,
-                "url": "https://fieldnotes.example/second",
-            },
-            self.db_path,
-        )
+def test_seed_only_when_empty(db_path: Path) -> None:
+    assert db.seed_specimens(db_path) == 1
+    assert db.seed_specimens(db_path) == 0
+    assert db.specimen_count(db_path) == 1
 
-        links = db.list_related_links(specimen_id, self.db_path)
-        self.assertEqual(len(links), 2)
-        self.assertEqual(links[1]["id"], first_link_id)
-        self.assertEqual(links[1]["url"], "https://fieldnotes.example/first")
 
-        db.delete_related_link(first_link_id, self.db_path)
-        links = db.list_related_links(specimen_id, self.db_path)
-        self.assertEqual(len(links), 1)
-        self.assertEqual(links[0]["url"], "https://fieldnotes.example/second")
+def test_create_image_and_observation_records(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-2000",
+            "title": "Image and notes test",
+        },
+        db_path,
+    )
 
-        db.delete_specimen(specimen_id, self.db_path)
-        self.assertEqual(db.list_related_links(specimen_id, self.db_path), [])
+    image_id = db.create_specimen_image(
+        {
+            "specimen_id": specimen_id,
+            "image_path": "data/images/FT-2000.jpg",
+            "image_type": "Overall",
+            "caption": "Overall view",
+            "photographer": "D. Walker",
+            "licence": "Private",
+            "date_taken": "2026-07-03",
+            "notes": "Shows the complete specimen.",
+        },
+        db_path,
+    )
+    observation_id = db.create_observation(
+        {
+            "specimen_id": specimen_id,
+            "observation_date": "2026-07-03",
+            "observation_type": "Morphology",
+            "notes": "**Markdown** observation note.",
+            "related_project": "Shell morphology",
+            "related_url": "https://example.com/project",
+            "public_visible": True,
+        },
+        db_path,
+    )
 
-    def test_create_context_records_and_link_specimen(self) -> None:
-        taxon_id = db.create_taxonomy(
-            {
-                "kingdom": "Animalia",
-                "phylum": "Mollusca",
-                "class_name": "Cephalopoda",
-                "genus": "Dactylioceras",
-                "species": "commune",
-                "identification_confidence": "Medium",
-            },
-            self.db_path,
-        )
-        age_id = db.create_geological_age(
-            {
-                "era": "Mesozoic",
-                "period": "Jurassic",
-                "epoch": "Early Jurassic",
-                "max_ma": "201.4",
-                "min_ma": "174.7",
-            },
-            self.db_path,
-        )
-        locality_id = db.create_locality(
-            {
-                "locality_name": "Whitby",
-                "formation": "Whitby Mudstone Formation",
-                "region": "North Yorkshire",
-                "country": "England",
-                "latitude": "54.486",
-                "longitude": "-0.614",
-            },
-            self.db_path,
-        )
-        preparation_type_id = db.create_preparation_type(
-            {"name": "Prepared", "description": "Prepared specimen."},
-            self.db_path,
-        )
+    images = db.list_specimen_images(specimen_id, db_path)
+    observations = db.list_observations(specimen_id, db_path)
+    assert len(images) == 1
+    assert images[0]["id"] == image_id
+    assert images[0]["caption"] == "Overall view"
+    assert len(observations) == 1
+    assert observations[0]["id"] == observation_id
+    assert observations[0]["notes"] == "**Markdown** observation note."
+    assert observations[0]["public_visible"] == 1
 
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-3000",
-                "title": "Context specimen",
-                "taxon_id": taxon_id,
-                "geological_age_id": age_id,
-                "locality_id": locality_id,
-                "preparation_type_id": preparation_type_id,
-            },
-            self.db_path,
-        )
+    db.delete_specimen_image(image_id, db_path)
+    db.delete_observation(observation_id, db_path)
+    assert db.list_specimen_images(specimen_id, db_path) == []
+    assert db.list_observations(specimen_id, db_path) == []
 
-        specimen = db.get_specimen(specimen_id, self.db_path)
-        self.assertEqual(specimen["taxon_id"], taxon_id)
-        self.assertEqual(specimen["geological_age_id"], age_id)
-        self.assertEqual(specimen["locality_id"], locality_id)
-        self.assertEqual(specimen["preparation_type_id"], preparation_type_id)
-        self.assertEqual(db.get_taxonomy(taxon_id, self.db_path)["genus"], "Dactylioceras")
-        self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
-        self.assertEqual(db.get_locality(locality_id, self.db_path)["country"], "England")
 
-        db.update_taxonomy(
-            taxon_id,
-            {
-                "kingdom": "Animalia",
-                "phylum": "Mollusca",
-                "class_name": "Cephalopoda",
-                "genus": "Hildoceras",
-                "species": "bifrons",
-                "identification_confidence": "High",
-            },
-            self.db_path,
-        )
-        db.update_geological_age(
-            age_id,
-            {
-                "era": "Mesozoic",
-                "period": "Jurassic",
-                "epoch": "Early Jurassic",
-                "max_ma": "201.4",
-                "min_ma": "174.7",
-            },
-            self.db_path,
-        )
-        db.update_locality(
-            locality_id,
-            {
-                "locality_name": "Charmouth",
-                "formation": "Charmouth Mudstone Formation",
-                "region": "Dorset",
-                "country": "England",
-                "latitude": "50.738",
-                "longitude": "-2.902",
-            },
-            self.db_path,
-        )
-        db.update_preparation_type(
-            preparation_type_id,
-            {"name": "Prepared and stabilized", "description": "Updated preparation."},
-            self.db_path,
-        )
+def test_create_related_links_and_cascade_delete(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-2500",
+            "title": "Related links test",
+        },
+        db_path,
+    )
+    first_link_id = db.create_related_link(
+        {
+            "specimen_id": specimen_id,
+            "url": "https://fieldnotes.example/first",
+        },
+        db_path,
+    )
+    db.create_related_link(
+        {
+            "specimen_id": specimen_id,
+            "url": "https://fieldnotes.example/second",
+        },
+        db_path,
+    )
 
-        self.assertEqual(db.get_taxonomy(taxon_id, self.db_path)["genus"], "Hildoceras")
-        self.assertEqual(db.get_geological_age(age_id, self.db_path)["period"], "Jurassic")
-        self.assertEqual(db.get_locality(locality_id, self.db_path)["locality_name"], "Charmouth")
-        preparation_names = [row["name"] for row in db.list_preparation_types(self.db_path)]
-        self.assertIn("Prepared and stabilized", preparation_names)
+    links = db.list_related_links(specimen_id, db_path)
+    assert len(links) == 2
+    assert links[1]["id"] == first_link_id
+    assert links[1]["url"] == "https://fieldnotes.example/first"
 
-    def test_delete_context_records(self) -> None:
-        taxon_id = db.create_taxonomy({"identification_notes": "Temporary taxon"}, self.db_path)
-        age_id = db.create_geological_age({"period": "Temporary period"}, self.db_path)
-        locality_id = db.create_locality({"locality_name": "Temporary locality"}, self.db_path)
-        preparation_type_id = db.create_preparation_type(
-            {"name": "Temporary preparation"},
-            self.db_path,
-        )
+    db.delete_related_link(first_link_id, db_path)
+    links = db.list_related_links(specimen_id, db_path)
+    assert len(links) == 1
+    assert links[0]["url"] == "https://fieldnotes.example/second"
 
-        db.delete_taxonomy(taxon_id, self.db_path)
-        db.delete_geological_age(age_id, self.db_path)
-        db.delete_locality(locality_id, self.db_path)
-        db.delete_preparation_type(preparation_type_id, self.db_path)
+    db.delete_specimen(specimen_id, db_path)
+    assert db.list_related_links(specimen_id, db_path) == []
 
-        self.assertIsNone(db.get_taxonomy(taxon_id, self.db_path))
-        self.assertIsNone(db.get_geological_age(age_id, self.db_path))
-        self.assertIsNone(db.get_locality(locality_id, self.db_path))
-        self.assertNotIn(
-            preparation_type_id,
-            [row["id"] for row in db.list_preparation_types(self.db_path)],
-        )
 
-    def test_create_update_and_delete_measurement_type(self) -> None:
-        measurement_type_id = db.create_measurement_type(
-            {
-                "name": "Umbilicus Diameter",
-                "unit": "mm",
-                "description": "Ammonite umbilicus diameter.",
-            },
-            self.db_path,
-        )
+def test_create_context_records_and_link_specimen(db_path: Path) -> None:
+    taxon_id = db.create_taxonomy(
+        {
+            "kingdom": "Animalia",
+            "phylum": "Mollusca",
+            "class_name": "Cephalopoda",
+            "genus": "Dactylioceras",
+            "species": "commune",
+            "identification_confidence": "Medium",
+        },
+        db_path,
+    )
+    age_id = db.create_geological_age(
+        {
+            "era": "Mesozoic",
+            "period": "Jurassic",
+            "epoch": "Early Jurassic",
+            "max_ma": "201.4",
+            "min_ma": "174.7",
+        },
+        db_path,
+    )
+    locality_id = db.create_locality(
+        {
+            "locality_name": "Whitby",
+            "formation": "Whitby Mudstone Formation",
+            "region": "North Yorkshire",
+            "country": "England",
+            "latitude": "54.486",
+            "longitude": "-0.614",
+        },
+        db_path,
+    )
+    preparation_type_id = db.create_preparation_type(
+        {"name": "Prepared", "description": "Prepared specimen."},
+        db_path,
+    )
 
-        measurement_type = db.get_measurement_type(measurement_type_id, self.db_path)
-        self.assertEqual(measurement_type["name"], "Umbilicus Diameter")
-        self.assertEqual(measurement_type["unit"], "mm")
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-3000",
+            "title": "Context specimen",
+            "taxon_id": taxon_id,
+            "geological_age_id": age_id,
+            "locality_id": locality_id,
+            "preparation_type_id": preparation_type_id,
+        },
+        db_path,
+    )
 
-        db.update_measurement_type(
-            measurement_type_id,
-            {
-                "name": "Umbilicus Width",
-                "unit": "mm",
-                "description": "Updated description.",
-            },
-            self.db_path,
-        )
-        updated = db.get_measurement_type(measurement_type_id, self.db_path)
-        self.assertEqual(updated["name"], "Umbilicus Width")
-        self.assertEqual(updated["description"], "Updated description.")
+    specimen = db.get_specimen(specimen_id, db_path)
+    assert specimen["taxon_id"] == taxon_id
+    assert specimen["geological_age_id"] == age_id
+    assert specimen["locality_id"] == locality_id
+    assert specimen["preparation_type_id"] == preparation_type_id
+    assert db.get_taxonomy(taxon_id, db_path)["genus"] == "Dactylioceras"
+    assert db.get_geological_age(age_id, db_path)["period"] == "Jurassic"
+    assert db.get_locality(locality_id, db_path)["country"] == "England"
 
-        measurement_types = db.list_measurement_types(self.db_path)
-        self.assertEqual([row["id"] for row in measurement_types], [measurement_type_id])
+    db.update_taxonomy(
+        taxon_id,
+        {
+            "kingdom": "Animalia",
+            "phylum": "Mollusca",
+            "class_name": "Cephalopoda",
+            "genus": "Hildoceras",
+            "species": "bifrons",
+            "identification_confidence": "High",
+        },
+        db_path,
+    )
+    db.update_geological_age(
+        age_id,
+        {
+            "era": "Mesozoic",
+            "period": "Jurassic",
+            "epoch": "Early Jurassic",
+            "max_ma": "201.4",
+            "min_ma": "174.7",
+        },
+        db_path,
+    )
+    db.update_locality(
+        locality_id,
+        {
+            "locality_name": "Charmouth",
+            "formation": "Charmouth Mudstone Formation",
+            "region": "Dorset",
+            "country": "England",
+            "latitude": "50.738",
+            "longitude": "-2.902",
+        },
+        db_path,
+    )
+    db.update_preparation_type(
+        preparation_type_id,
+        {"name": "Prepared and stabilized", "description": "Updated preparation."},
+        db_path,
+    )
 
-        db.delete_measurement_type(measurement_type_id, self.db_path)
-        self.assertEqual(db.list_measurement_types(self.db_path), [])
+    assert db.get_taxonomy(taxon_id, db_path)["genus"] == "Hildoceras"
+    assert db.get_geological_age(age_id, db_path)["period"] == "Jurassic"
+    assert db.get_locality(locality_id, db_path)["locality_name"] == "Charmouth"
+    preparation_names = [row["name"] for row in db.list_preparation_types(db_path)]
+    assert "Prepared and stabilized" in preparation_names
 
-    def test_measurement_type_name_is_unique_case_insensitive(self) -> None:
-        db.create_measurement_type({"name": "Length", "unit": "mm"}, self.db_path)
-        with self.assertRaises(sqlite3.IntegrityError):
-            db.create_measurement_type({"name": "length", "unit": "mm"}, self.db_path)
 
-    def test_create_specimen_measurements_and_cascade_delete(self) -> None:
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-3500",
-                "title": "Measured specimen",
-            },
-            self.db_path,
-        )
-        measurement_type_id = db.create_measurement_type(
-            {
-                "name": "Length",
-                "unit": "mm",
-            },
-            self.db_path,
-        )
-        measurement_id = db.create_specimen_measurement(
+def test_delete_context_records(db_path: Path) -> None:
+    taxon_id = db.create_taxonomy({"identification_notes": "Temporary taxon"}, db_path)
+    age_id = db.create_geological_age({"period": "Temporary period"}, db_path)
+    locality_id = db.create_locality({"locality_name": "Temporary locality"}, db_path)
+    preparation_type_id = db.create_preparation_type(
+        {"name": "Temporary preparation"},
+        db_path,
+    )
+
+    db.delete_taxonomy(taxon_id, db_path)
+    db.delete_geological_age(age_id, db_path)
+    db.delete_locality(locality_id, db_path)
+    db.delete_preparation_type(preparation_type_id, db_path)
+
+    assert db.get_taxonomy(taxon_id, db_path) is None
+    assert db.get_geological_age(age_id, db_path) is None
+    assert db.get_locality(locality_id, db_path) is None
+    assert preparation_type_id not in [row["id"] for row in db.list_preparation_types(db_path)]
+
+
+def test_create_update_and_delete_measurement_type(db_path: Path) -> None:
+    measurement_type_id = db.create_measurement_type(
+        {
+            "name": "Umbilicus Diameter",
+            "unit": "mm",
+            "description": "Ammonite umbilicus diameter.",
+        },
+        db_path,
+    )
+
+    measurement_type = db.get_measurement_type(measurement_type_id, db_path)
+    assert measurement_type["name"] == "Umbilicus Diameter"
+    assert measurement_type["unit"] == "mm"
+
+    db.update_measurement_type(
+        measurement_type_id,
+        {
+            "name": "Umbilicus Width",
+            "unit": "mm",
+            "description": "Updated description.",
+        },
+        db_path,
+    )
+    updated = db.get_measurement_type(measurement_type_id, db_path)
+    assert updated["name"] == "Umbilicus Width"
+    assert updated["description"] == "Updated description."
+
+    measurement_types = db.list_measurement_types(db_path)
+    assert [row["id"] for row in measurement_types] == [measurement_type_id]
+
+    db.delete_measurement_type(measurement_type_id, db_path)
+    assert db.list_measurement_types(db_path) == []
+
+
+def test_measurement_type_name_is_unique_case_insensitive(db_path: Path) -> None:
+    db.create_measurement_type({"name": "Length", "unit": "mm"}, db_path)
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_measurement_type({"name": "length", "unit": "mm"}, db_path)
+
+
+def test_create_specimen_measurements_and_cascade_delete(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-3500",
+            "title": "Measured specimen",
+        },
+        db_path,
+    )
+    measurement_type_id = db.create_measurement_type(
+        {
+            "name": "Length",
+            "unit": "mm",
+        },
+        db_path,
+    )
+    measurement_id = db.create_specimen_measurement(
+        {
+            "specimen_id": specimen_id,
+            "measurement_type_id": measurement_type_id,
+            "value": "43.2",
+        },
+        db_path,
+    )
+
+    measurements = db.list_specimen_measurements(specimen_id, db_path)
+    assert len(measurements) == 1
+    assert measurements[0]["id"] == measurement_id
+    assert measurements[0]["measurement_name"] == "Length"
+    assert measurements[0]["measurement_unit"] == "mm"
+    assert measurements[0]["value"] == "43.2"
+
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_specimen_measurement(
             {
                 "specimen_id": specimen_id,
                 "measurement_type_id": measurement_type_id,
-                "value": "43.2",
+                "value": "44.0",
             },
-            self.db_path,
+            db_path,
         )
 
-        measurements = db.list_specimen_measurements(specimen_id, self.db_path)
-        self.assertEqual(len(measurements), 1)
-        self.assertEqual(measurements[0]["id"], measurement_id)
-        self.assertEqual(measurements[0]["measurement_name"], "Length")
-        self.assertEqual(measurements[0]["measurement_unit"], "mm")
-        self.assertEqual(measurements[0]["value"], "43.2")
+    db.delete_specimen_measurement(measurement_id, db_path)
+    assert db.list_specimen_measurements(specimen_id, db_path) == []
 
-        with self.assertRaises(sqlite3.IntegrityError):
-            db.create_specimen_measurement(
-                {
-                    "specimen_id": specimen_id,
-                    "measurement_type_id": measurement_type_id,
-                    "value": "44.0",
-                },
-                self.db_path,
-            )
-
-        db.delete_specimen_measurement(measurement_id, self.db_path)
-        self.assertEqual(db.list_specimen_measurements(specimen_id, self.db_path), [])
-
-        measurement_id = db.create_specimen_measurement(
-            {
-                "specimen_id": specimen_id,
-                "measurement_type_id": measurement_type_id,
-                "value": "43.2",
-            },
-            self.db_path,
-        )
-        self.assertIsInstance(measurement_id, int)
-        db.delete_specimen(specimen_id, self.db_path)
-        self.assertEqual(db.list_specimen_measurements(specimen_id, self.db_path), [])
-
-    def test_create_acquisition_and_document_records(self) -> None:
-        acquisition_id = db.create_acquisition(
-            {
-                "acquisition_date": "2026-07-03",
-                "source_name": "Example dealer",
-                "source_type": "Seller",
-                "purchase_price": "25.00",
-                "currency": "GBP",
-                "provenance_summary": "Documented purchase.",
-                "legality_notes": "Export status documented.",
-                "ethical_confidence": "High",
-            },
-            self.db_path,
-        )
-        document_id = db.create_acquisition_document(
-            {
-                "acquisition_id": acquisition_id,
-                "document_path": "data/documents/receipt.pdf",
-                "document_type": "Receipt",
-                "title": "Purchase receipt",
-            },
-            self.db_path,
-        )
-        specimen_id = db.create_specimen(
-            {
-                "collection_code": "FT-4000",
-                "title": "Provenance specimen",
-                "acquisition_id": acquisition_id,
-                "public_visible": True,
-            },
-            self.db_path,
-        )
-
-        acquisition = db.get_acquisition(acquisition_id, self.db_path)
-        specimen = db.get_specimen(specimen_id, self.db_path)
-        documents = db.list_acquisition_documents(acquisition_id, self.db_path)
-        self.assertEqual(acquisition["source_name"], "Example dealer")
-        self.assertTrue(db.has_acquisition_documents(acquisition_id, self.db_path))
-        self.assertEqual(specimen["acquisition_id"], acquisition_id)
-        self.assertEqual(specimen["public_visible"], 1)
-        self.assertEqual(documents[0]["id"], document_id)
-        filtered = db.list_specimens(self.db_path, documented_only=True)
-        self.assertEqual([row["id"] for row in filtered], [specimen_id])
-
-        db.update_acquisition(
-            acquisition_id,
-            {
-                "acquisition_date": "2026-07-04",
-                "source_name": "Updated dealer",
-                "source_type": "Auction",
-                "purchase_price": "30.00",
-                "currency": "GBP",
-                "provenance_summary": "Updated purchase record.",
-                "legality_notes": "Updated export status.",
-                "ethical_confidence": "Medium",
-                "notes": "Updated private note.",
-            },
-            self.db_path,
-        )
-        updated = db.get_acquisition(acquisition_id, self.db_path)
-        self.assertEqual(updated["source_name"], "Updated dealer")
-        self.assertEqual(updated["source_type"], "Auction")
-        self.assertEqual(updated["ethical_confidence"], "Medium")
+    measurement_id = db.create_specimen_measurement(
+        {
+            "specimen_id": specimen_id,
+            "measurement_type_id": measurement_type_id,
+            "value": "43.2",
+        },
+        db_path,
+    )
+    assert isinstance(measurement_id, int)
+    db.delete_specimen(specimen_id, db_path)
+    assert db.list_specimen_measurements(specimen_id, db_path) == []
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_create_acquisition_and_document_records(db_path: Path) -> None:
+    acquisition_id = db.create_acquisition(
+        {
+            "acquisition_date": "2026-07-03",
+            "source_name": "Example dealer",
+            "source_type": "Seller",
+            "purchase_price": "25.00",
+            "currency": "GBP",
+            "provenance_summary": "Documented purchase.",
+            "legality_notes": "Export status documented.",
+            "ethical_confidence": "High",
+        },
+        db_path,
+    )
+    document_id = db.create_acquisition_document(
+        {
+            "acquisition_id": acquisition_id,
+            "document_path": "data/documents/receipt.pdf",
+            "document_type": "Receipt",
+            "title": "Purchase receipt",
+        },
+        db_path,
+    )
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-4000",
+            "title": "Provenance specimen",
+            "acquisition_id": acquisition_id,
+            "public_visible": True,
+        },
+        db_path,
+    )
+
+    acquisition = db.get_acquisition(acquisition_id, db_path)
+    specimen = db.get_specimen(specimen_id, db_path)
+    documents = db.list_acquisition_documents(acquisition_id, db_path)
+    assert acquisition["source_name"] == "Example dealer"
+    assert db.has_acquisition_documents(acquisition_id, db_path)
+    assert specimen["acquisition_id"] == acquisition_id
+    assert specimen["public_visible"] == 1
+    assert documents[0]["id"] == document_id
+    filtered = db.list_specimens(db_path, documented_only=True)
+    assert [row["id"] for row in filtered] == [specimen_id]
+
+    db.update_acquisition(
+        acquisition_id,
+        {
+            "acquisition_date": "2026-07-04",
+            "source_name": "Updated dealer",
+            "source_type": "Auction",
+            "purchase_price": "30.00",
+            "currency": "GBP",
+            "provenance_summary": "Updated purchase record.",
+            "legality_notes": "Updated export status.",
+            "ethical_confidence": "Medium",
+            "notes": "Updated private note.",
+        },
+        db_path,
+    )
+    updated = db.get_acquisition(acquisition_id, db_path)
+    assert updated["source_name"] == "Updated dealer"
+    assert updated["source_type"] == "Auction"
+    assert updated["ethical_confidence"] == "Medium"

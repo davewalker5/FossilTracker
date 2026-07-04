@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from .config import database_path
-from .db import apply_migrations, export_csv, import_csv, seed_specimens, specimen_count
+from .db import apply_migrations, seed_specimens, specimen_count
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,12 +31,6 @@ def main(argv: list[str] | None = None) -> int:
     subparsers.add_parser("seed", help="Add the suggested starter specimens if empty.")
     subparsers.add_parser("count", help="Print the number of specimens.")
 
-    export_parser = subparsers.add_parser("export-csv", help="Export specimens to CSV.")
-    export_parser.add_argument("destination", type=Path)
-
-    import_parser = subparsers.add_parser("import-csv", help="Import specimens from CSV.")
-    import_parser.add_argument("source", type=Path)
-
     datasette_parser = subparsers.add_parser("datasette", help="Open the database in Datasette.")
     datasette_parser.add_argument("--port", type=int, default=8001)
 
@@ -56,18 +50,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "count":
         apply_migrations(args.db)
         print(specimen_count(args.db))
-        return 0
-
-    if args.command == "export-csv":
-        apply_migrations(args.db)
-        export_csv(args.destination, args.db)
-        print(f"Exported specimens to {args.destination}")
-        return 0
-
-    if args.command == "import-csv":
-        apply_migrations(args.db)
-        count = import_csv(args.source, args.db)
-        print(f"Imported {count} specimen{'s' if count != 1 else ''}.")
         return 0
 
     if args.command == "datasette":

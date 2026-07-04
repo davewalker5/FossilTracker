@@ -26,7 +26,6 @@ from fossil_tracker.db import (
     list_related_links,
     list_specimen_images,
     list_specimen_measurements,
-    list_taxonomy,
     next_collection_code,
 )
 
@@ -251,26 +250,19 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
         "Common name", value=data.get("common_name", ""), key=f"{prefix}-common-name"
     )
 
-    taxonomy_records = list_taxonomy(db_path)
     geological_age_records = list_geological_ages(db_path)
     locality_records = list_localities(db_path)
     preparation_records = list_preparation_types(db_path)
-    context = st.columns([1, 1, 1])
-    values["taxon_id"] = context[0].selectbox(
-        "Taxonomic identification",
-        record_ids(taxonomy_records),
-        format_func=lambda value: record_option_label(value, taxonomy_records, taxonomy_label),
-        index=record_index(taxonomy_records, data.get("taxon_id")),
-        key=f"{prefix}-taxon-id",
-    )
-    values["geological_age_id"] = context[1].selectbox(
+    values["taxon_id"] = data.get("taxon_id", "")
+    context = st.columns([1, 1])
+    values["geological_age_id"] = context[0].selectbox(
         "Geological age / period",
         record_ids(geological_age_records),
         format_func=lambda value: record_option_label(value, geological_age_records, geological_age_label),
         index=record_index(geological_age_records, data.get("geological_age_id")),
         key=f"{prefix}-age-id",
     )
-    values["locality_id"] = context[2].selectbox(
+    values["locality_id"] = context[1].selectbox(
         "Formation or locality",
         record_ids(locality_records),
         format_func=lambda value: record_option_label(value, locality_records, locality_label),

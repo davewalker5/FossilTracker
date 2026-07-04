@@ -169,6 +169,10 @@ CREATE TABLE specimen_measurements (
     FOREIGN KEY (measurement_type_id) REFERENCES measurement_types (id),
     UNIQUE (specimen_id, measurement_type_id)
 );
+
+CREATE UNIQUE INDEX idx_specimens_taxon_id_unique
+ON specimens (taxon_id)
+WHERE taxon_id IS NOT NULL;
 """
 
 
@@ -399,6 +403,7 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
     assert specimen["locality_id"] == locality_id
     assert specimen["preparation_type_id"] == preparation_type_id
     assert db.get_taxonomy(taxon_id, db_path)["genus"] == "Dactylioceras"
+    assert db.get_taxonomy_for_specimen(specimen_id, db_path)["id"] == taxon_id
     assert db.get_geological_age(age_id, db_path)["period"] == "Jurassic"
     assert db.get_locality(locality_id, db_path)["country"] == "England"
 
@@ -448,6 +453,28 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
     assert db.get_locality(locality_id, db_path)["locality_name"] == "Charmouth"
     preparation_names = [row["name"] for row in db.list_preparation_types(db_path)]
     assert "Prepared and stabilized" in preparation_names
+
+
+def test_taxonomy_record_can_only_be_linked_to_one_specimen(db_path: Path) -> None:
+    taxon_id = db.create_taxonomy({"genus": "Dactylioceras"}, db_path)
+    db.create_specimen(
+        {
+            "collection_code": "FT-3100",
+            "title": "First taxonomy specimen",
+            "taxon_id": taxon_id,
+        },
+        db_path,
+    )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_specimen(
+            {
+                "collection_code": "FT-3101",
+                "title": "Second taxonomy specimen",
+                "taxon_id": taxon_id,
+            },
+            db_path,
+        )
 
 
 def test_delete_context_records(db_path: Path) -> None:

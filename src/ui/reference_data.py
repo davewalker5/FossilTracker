@@ -9,33 +9,28 @@ import sqlite3
 import streamlit as st
 
 from fossil_tracker.db import (
-    create_geological_age,
     create_licence,
+    create_geological_age,
     create_locality,
     create_measurement_type,
     create_preparation_type,
-    create_taxonomy,
     delete_geological_age,
     delete_licence,
     delete_locality,
     delete_measurement_type,
     delete_preparation_type,
-    delete_taxonomy,
     list_geological_ages,
     list_licences,
     list_localities,
     list_measurement_types,
     list_preparation_types,
-    list_taxonomy,
     update_geological_age,
     update_licence,
     update_locality,
     update_measurement_type,
     update_preparation_type,
-    update_taxonomy,
 )
 from ui.common import (
-    CONFIDENCE_OPTIONS,
     geological_age_label,
     locality_label,
     option_index,
@@ -44,20 +39,17 @@ from ui.common import (
     render_locality_table,
     render_measurement_type_table,
     render_preparation_type_table,
-    render_taxonomy_table,
-    taxonomy_label,
 )
 
 
 def show_context_manager(db_path: Path) -> None:
-    """Render taxonomy, locality, age, and preparation reference forms.
+    """Render locality, age, preparation, licensing, and measurement reference forms.
 
     :param db_path: SQLite database path.
     """
 
-    taxonomy_tab, ages_tab, localities_tab, preparation_tab, licensing_tab, measurement_tab = st.tabs(
+    ages_tab, localities_tab, preparation_tab, licensing_tab, measurement_tab = st.tabs(
         [
-            "Taxonomy",
             "Geological ages",
             "Localities",
             "Preparation types",
@@ -65,9 +57,6 @@ def show_context_manager(db_path: Path) -> None:
             "Measurement types",
         ]
     )
-
-    with taxonomy_tab:
-        show_taxonomy_manager(db_path)
 
     with ages_tab:
         show_geological_age_manager(db_path)
@@ -83,109 +72,6 @@ def show_context_manager(db_path: Path) -> None:
 
     with measurement_tab:
         show_measurement_type_manager(db_path)
-
-
-def show_taxonomy_manager(db_path: Path) -> None:
-    """Render taxonomy reference data management.
-
-    :param db_path: SQLite database path.
-    """
-
-    records = list_taxonomy(db_path)
-    st.subheader("Taxonomy")
-    render_taxonomy_table(records)
-
-    choices = {"New taxonomy": None}
-    choices.update({f"{taxonomy_label(row)} #{row['id']}": row["id"] for row in records})
-    selected = st.selectbox("Taxonomy", list(choices), key="taxonomy-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in records if row["id"] == selected_id), None)
-
-    with st.form(f"taxonomy-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
-        tax_cols = st.columns([1, 1, 1, 1])
-        kingdom = tax_cols[0].text_input(
-            "Kingdom",
-            value=(selected_row["kingdom"] or "") if selected_row else "Animalia",
-            key=f"taxonomy-kingdom-{selected_id or 'new'}",
-        )
-        phylum = tax_cols[1].text_input(
-            "Phylum",
-            value=(selected_row["phylum"] or "") if selected_row else "",
-            key=f"taxonomy-phylum-{selected_id or 'new'}",
-        )
-        class_name = tax_cols[2].text_input(
-            "Class",
-            value=(selected_row["class_name"] or "") if selected_row else "",
-            key=f"taxonomy-class-{selected_id or 'new'}",
-        )
-        order_name = tax_cols[3].text_input(
-            "Order",
-            value=(selected_row["order_name"] or "") if selected_row else "",
-            key=f"taxonomy-order-{selected_id or 'new'}",
-        )
-        family_cols = st.columns([1, 1, 1])
-        family = family_cols[0].text_input(
-            "Family",
-            value=(selected_row["family"] or "") if selected_row else "",
-            key=f"taxonomy-family-{selected_id or 'new'}",
-        )
-        genus = family_cols[1].text_input(
-            "Genus",
-            value=(selected_row["genus"] or "") if selected_row else "",
-            key=f"taxonomy-genus-{selected_id or 'new'}",
-        )
-        species = family_cols[2].text_input(
-            "Species",
-            value=(selected_row["species"] or "") if selected_row else "",
-            key=f"taxonomy-species-{selected_id or 'new'}",
-        )
-        confidence = st.selectbox(
-            "Identification confidence",
-            CONFIDENCE_OPTIONS,
-            index=option_index(
-                CONFIDENCE_OPTIONS,
-                selected_row["identification_confidence"] if selected_row else "Unknown",
-            ),
-            key=f"taxonomy-confidence-{selected_id or 'new'}",
-        )
-        notes = st.text_area(
-            "Identification notes",
-            value=selected_row["identification_notes"] if selected_row and selected_row["identification_notes"] else "",
-            key=f"taxonomy-notes-{selected_id or 'new'}",
-        )
-        save_col, delete_col = st.columns([1, 1])
-        save_taxonomy = save_col.form_submit_button("Save taxonomy")
-        remove_taxonomy = delete_col.form_submit_button("Delete taxonomy", disabled=selected_row is None)
-
-    values = {
-        "kingdom": kingdom,
-        "phylum": phylum,
-        "class_name": class_name,
-        "order_name": order_name,
-        "family": family,
-        "genus": genus,
-        "species": species,
-        "identification_confidence": confidence,
-        "identification_notes": notes,
-    }
-    if save_taxonomy:
-        if selected_row is None:
-            create_taxonomy(values, db_path)
-            st.success("Taxonomy record added.")
-        else:
-            update_taxonomy(selected_row["id"], values, db_path)
-            st.success("Taxonomy record updated.")
-        st.rerun()
-
-    if remove_taxonomy and selected_row is not None:
-        try:
-            delete_taxonomy(selected_row["id"], db_path)
-        except sqlite3.IntegrityError:
-            st.error("This taxonomy record is in use and cannot be deleted.")
-            return
-        st.warning("Taxonomy record deleted.")
-        st.rerun()
-
 
 def show_geological_age_manager(db_path: Path) -> None:
     """Render geological age reference data management.

@@ -16,6 +16,7 @@ from ui.provenance import show_provenance_manager
 from ui.reference_data import show_context_manager
 from ui.related_links import show_related_links
 from ui.search import show_register
+from ui.taxonomy import show_taxonomy_manager
 
 
 def main() -> None:
@@ -43,6 +44,7 @@ def main() -> None:
         "Search",
         "Add specimen",
         "Edit specimen",
+        "Taxonomy",
         "Provenance",
         "Documents",
         "Images",
@@ -60,6 +62,7 @@ def main() -> None:
         tab_register,
         tab_add,
         tab_edit,
+        tab_taxonomy,
         tab_provenance,
         tab_documents,
         tab_images,
@@ -84,6 +87,10 @@ def main() -> None:
     if tab_edit.open:
         with tab_edit:
             show_edit_form(db_path)
+
+    if tab_taxonomy.open:
+        with tab_taxonomy:
+            show_taxonomy_manager(db_path)
 
     if tab_context.open:
         with tab_context:

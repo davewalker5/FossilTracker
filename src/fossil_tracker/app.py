@@ -206,14 +206,7 @@ def show_register(db_path: Path) -> None:
         st.info("No matching specimens yet.")
         return
 
-    st.dataframe(
-        [
-            search_result_row(specimen, db_path)
-            for specimen in specimens
-        ],
-        use_container_width=True,
-        hide_index=True,
-    )
+    render_search_results(specimens, db_path)
 
 
 def show_add_form(db_path: Path) -> None:
@@ -1529,6 +1522,39 @@ def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
         "Country/Region": country_region,
         "Acquisition Date": acquisition["acquisition_date"] if acquisition else "",
     }
+
+
+def render_search_results(specimens: list[dict], db_path: Path) -> None:
+    """Render Search results with per-row edit actions.
+
+    :param specimens: Matching specimen rows.
+    :param db_path: SQLite database path.
+    """
+
+    widths = [1.2, 2.2, 1.4, 1.6, 1.2, 0.7]
+    headers = [
+        "Collection Code",
+        "Title",
+        "Common Name",
+        "Country/Region",
+        "Acquisition Date",
+        "",
+    ]
+    header_cols = st.columns(widths)
+    for column, header in zip(header_cols, headers, strict=True):
+        column.markdown(f"**{header}**" if header else "")
+
+    for specimen in specimens:
+        row = search_result_row(specimen, db_path)
+        row_cols = st.columns(widths)
+        row_cols[0].write(row["Collection Code"])
+        row_cols[1].write(row["Title"])
+        row_cols[2].write(row["Common Name"])
+        row_cols[3].write(row["Country/Region"])
+        row_cols[4].write(row["Acquisition Date"])
+        if row_cols[5].button("Edit", key=f"edit-search-result-{specimen['id']}"):
+            st.session_state["current_specimen_id"] = specimen["id"]
+            st.success("Selected for editing. Open the Edit specimen tab.")
 
 
 def render_taxonomy_table(records: list[dict]) -> None:

@@ -27,7 +27,7 @@ py-modules = ["streamlit_app"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["fossil_tracker*", "ui*"]
+include = ["db*", "fossil_tracker*", "ui*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

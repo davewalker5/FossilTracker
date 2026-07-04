@@ -362,6 +362,28 @@ def create_acquisition(values: dict[str, Any], db_path: Path | None = None) -> i
     )
 
 
+def update_acquisition(
+    acquisition_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update an acquisition record.
+
+    :param acquisition_id: Acquisition primary key.
+    :param values: Acquisition field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(ACQUISITION_FIELDS, values)
+    payload["ethical_confidence"] = payload.get("ethical_confidence") or "Unknown"
+    assignments = ", ".join([f"{field} = ?" for field in [*ACQUISITION_FIELDS, "updated_at"]])
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE acquisitions SET {assignments} WHERE id = ?",
+            [payload[field] for field in ACQUISITION_FIELDS] + [payload["updated_at"], acquisition_id],
+        )
+        connection.commit()
+
+
 def list_acquisition_documents(
     acquisition_id: int, db_path: Path | None = None
 ) -> list[sqlite3.Row]:

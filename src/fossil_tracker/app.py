@@ -52,6 +52,7 @@ from fossil_tracker.db import (
     list_specimens,
     list_taxonomy,
     seed_specimens,
+    update_acquisition,
     update_specimen,
 )
 
@@ -405,70 +406,117 @@ def show_context_manager(db_path: Path) -> None:
 
 
 def show_provenance_manager(db_path: Path) -> None:
-    """Render acquisition management and selected-specimen provenance details.
+    """Render provenance management for the selected specimen.
 
     :param db_path: SQLite database path.
     """
 
-    acquisitions = list_acquisitions(db_path)
     specimens = list_specimens(db_path)
-
-    if specimens:
-        specimen_choices = {
-            f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens
-        }
-        selected_specimen_label = st.selectbox(
-            "Specimen",
-            list(specimen_choices),
-            index=specimen_choice_index(specimens),
-            key="provenance-specimen",
-            on_change=remember_selected_specimen,
-            args=("provenance-specimen", specimen_choices),
-        )
-        remember_default_specimen(selected_specimen_label, specimen_choices)
-        specimen = get_specimen(specimen_choices[selected_specimen_label], db_path)
-        if specimen is None:
-            st.warning("Selected specimen was not found.")
-            return
-        render_specimen_provenance(specimen, db_path)
-    else:
+    if not specimens:
         st.info("Add a specimen before linking provenance records.")
+        return
 
-    st.subheader("Acquisitions")
-    render_reference_list([acquisition_label(row) for row in acquisitions])
+    specimen_choices = {
+        f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens
+    }
+    selected_specimen_label = st.selectbox(
+        "Specimen",
+        list(specimen_choices),
+        index=specimen_choice_index(specimens),
+        key="provenance-specimen",
+        on_change=remember_selected_specimen,
+        args=("provenance-specimen", specimen_choices),
+    )
+    remember_default_specimen(selected_specimen_label, specimen_choices)
+    specimen = get_specimen(specimen_choices[selected_specimen_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
 
-    with st.form("add-acquisition", clear_on_submit=True):
+    acquisition = get_acquisition(specimen["acquisition_id"], db_path)
+    data = dict(acquisition or {})
+    widget_suffix = f"{specimen['id']}-{data.get('id', 'new')}"
+
+    st.subheader("Provenance")
+    with st.form(f"provenance-form-{widget_suffix}"):
         top = st.columns([1, 1, 1])
-        acquisition_date = top[0].text_input("Acquisition date")
-        source_name = top[1].text_input("Source / seller / collector")
-        source_type = top[2].selectbox("Source type", SOURCE_TYPE_OPTIONS)
-        seller_url = st.text_input("Seller URL")
-        price = st.columns([1, 1])
-        purchase_price = price[0].text_input("Purchase price")
-        currency = price[1].text_input("Currency")
-        confidence = st.selectbox("Ethical confidence", CONFIDENCE_OPTIONS)
-        provenance_summary = st.text_area("Provenance summary")
-        legality_notes = st.text_area("Legality notes")
-        notes = st.text_area("Private acquisition notes")
-        add_acquisition = st.form_submit_button("Add acquisition")
-
-    if add_acquisition:
-        create_acquisition(
-            {
-                "acquisition_date": acquisition_date,
-                "source_name": source_name,
-                "source_type": source_type,
-                "seller_url": seller_url,
-                "purchase_price": purchase_price,
-                "currency": currency,
-                "provenance_summary": provenance_summary,
-                "legality_notes": legality_notes,
-                "ethical_confidence": confidence,
-                "notes": notes,
-            },
-            db_path,
+        acquisition_date = top[0].text_input(
+            "Acquisition date",
+            value=data.get("acquisition_date", ""),
+            key=f"provenance-date-{widget_suffix}",
         )
-        st.success("Acquisition added.")
+        source_name = top[1].text_input(
+            "Source / seller / collector",
+            value=data.get("source_name", ""),
+            key=f"provenance-source-{widget_suffix}",
+        )
+        source_type = top[2].selectbox(
+            "Source type",
+            SOURCE_TYPE_OPTIONS,
+            index=option_index(SOURCE_TYPE_OPTIONS, data.get("source_type", "")),
+            key=f"provenance-source-type-{widget_suffix}",
+        )
+        seller_url = st.text_input(
+            "Seller URL",
+            value=data.get("seller_url", ""),
+            key=f"provenance-seller-url-{widget_suffix}",
+        )
+        price = st.columns([1, 1])
+        purchase_price = price[0].text_input(
+            "Purchase price",
+            value=data.get("purchase_price", ""),
+            key=f"provenance-price-{widget_suffix}",
+        )
+        currency = price[1].text_input(
+            "Currency",
+            value=data.get("currency", ""),
+            key=f"provenance-currency-{widget_suffix}",
+        )
+        confidence = st.selectbox(
+            "Ethical confidence",
+            CONFIDENCE_OPTIONS,
+            index=option_index(CONFIDENCE_OPTIONS, data.get("ethical_confidence", "Unknown")),
+            key=f"provenance-confidence-{widget_suffix}",
+        )
+        provenance_summary = st.text_area(
+            "Provenance summary",
+            value=data.get("provenance_summary", ""),
+            key=f"provenance-summary-{widget_suffix}",
+        )
+        legality_notes = st.text_area(
+            "Legality notes",
+            value=data.get("legality_notes", ""),
+            key=f"provenance-legality-{widget_suffix}",
+        )
+        notes = st.text_area(
+            "Private acquisition notes",
+            value=data.get("notes", ""),
+            key=f"provenance-notes-{widget_suffix}",
+        )
+        save_acquisition = st.form_submit_button("Save provenance")
+
+    if save_acquisition:
+        values = {
+            "acquisition_date": acquisition_date,
+            "source_name": source_name,
+            "source_type": source_type,
+            "seller_url": seller_url,
+            "purchase_price": purchase_price,
+            "currency": currency,
+            "provenance_summary": provenance_summary,
+            "legality_notes": legality_notes,
+            "ethical_confidence": confidence,
+            "notes": notes,
+        }
+        if acquisition is None:
+            acquisition_id = create_acquisition(values, db_path)
+            specimen_values = dict(specimen)
+            specimen_values["acquisition_id"] = acquisition_id
+            update_specimen(specimen["id"], specimen_values, db_path)
+            st.success("Provenance added.")
+        else:
+            update_acquisition(acquisition["id"], values, db_path)
+            st.success("Provenance updated.")
         st.rerun()
 
 
@@ -709,41 +757,6 @@ def show_related_links(db_path: Path) -> None:
         )
         st.success("Link added.")
         st.rerun()
-
-
-def render_specimen_provenance(specimen: dict, db_path: Path) -> None:
-    """Render provenance details for the selected specimen.
-
-    :param specimen: Selected specimen row.
-    :param db_path: SQLite database path.
-    """
-
-    acquisition = get_acquisition(specimen["acquisition_id"], db_path)
-    st.subheader("Selected specimen provenance")
-    if acquisition is None:
-        st.info("No acquisition is linked to this specimen. Link one from Edit specimen.")
-        return
-
-    details = st.columns([1, 1, 1])
-    details[0].markdown(f"**Source**  \n{_blank(acquisition['source_name'])}")
-    details[1].markdown(f"**Source type**  \n{_blank(acquisition['source_type'])}")
-    details[2].markdown(f"**Acquisition date**  \n{_blank(acquisition['acquisition_date'])}")
-
-    ethics = st.columns([1, 1])
-    ethics[0].markdown(f"**Ethical confidence**  \n{_blank(acquisition['ethical_confidence'])}")
-    seller_url = acquisition["seller_url"]
-    seller_display = f"[{seller_url}]({seller_url})" if seller_url else "Not recorded"
-    ethics[1].markdown(f"**Seller URL**  \n{seller_display}")
-
-    if acquisition["provenance_summary"]:
-        st.markdown("**Provenance summary**")
-        st.write(acquisition["provenance_summary"])
-    if acquisition["legality_notes"]:
-        st.markdown("**Legality notes**")
-        st.write(acquisition["legality_notes"])
-    if acquisition["notes"]:
-        st.markdown("**Private acquisition notes**")
-        st.write(acquisition["notes"])
 
 
 def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
@@ -1132,6 +1145,20 @@ def record_option_label(value: int | None, records: list[dict], label_func) -> s
         if record["id"] == value:
             return label_func(record)
     return "Not recorded"
+
+
+def option_index(options: list[str], value: object) -> int:
+    """Return the index of a value in a fixed option list.
+
+    :param options: Available options.
+    :param value: Current value.
+    :return: Matching index, or 0 when absent.
+    """
+
+    try:
+        return options.index(str(value or ""))
+    except ValueError:
+        return 0
 
 
 def specimen_choice_index(specimens: list[dict]) -> int:

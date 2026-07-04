@@ -374,6 +374,26 @@ class DatabaseTests(unittest.TestCase):
         filtered = db.list_specimens(self.db_path, documented_only=True)
         self.assertEqual([row["id"] for row in filtered], [specimen_id])
 
+        db.update_acquisition(
+            acquisition_id,
+            {
+                "acquisition_date": "2026-07-04",
+                "source_name": "Updated dealer",
+                "source_type": "Auction",
+                "purchase_price": "30.00",
+                "currency": "GBP",
+                "provenance_summary": "Updated purchase record.",
+                "legality_notes": "Updated export status.",
+                "ethical_confidence": "Medium",
+                "notes": "Updated private note.",
+            },
+            self.db_path,
+        )
+        updated = db.get_acquisition(acquisition_id, self.db_path)
+        self.assertEqual(updated["source_name"], "Updated dealer")
+        self.assertEqual(updated["source_type"], "Auction")
+        self.assertEqual(updated["ethical_confidence"], "Medium")
+
 
 if __name__ == "__main__":
     unittest.main()

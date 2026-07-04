@@ -109,15 +109,15 @@ def main() -> None:
         )
         export_path.unlink(missing_ok=True)
 
-    tab_register, tab_add, tab_edit, tab_context, tab_provenance, tab_notes, tab_links = st.tabs(
+    tab_register, tab_add, tab_edit, tab_provenance, tab_notes, tab_links, tab_context = st.tabs(
         [
             "Register",
             "Add specimen",
             "Edit specimen",
-            "Context",
             "Provenance",
             "Images and notes",
             "Related links",
+            "Context",
         ]
     )
 

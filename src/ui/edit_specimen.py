@@ -15,6 +15,12 @@ from ui.common import (
 )
 
 
+def stay_on_edit_tab() -> None:
+    """Keep the main navigation on Edit Specimen after form submission."""
+
+    st.session_state["pending_main_tab"] = "Edit specimen"
+
+
 def show_edit_form(db_path: Path) -> None:
     """Render the edit/delete specimen form.
 
@@ -44,8 +50,12 @@ def show_edit_form(db_path: Path) -> None:
     with st.form("edit-specimen"):
         values = specimen_inputs("edit", specimen, db_path)
         left, right = st.columns([1, 1])
-        save = left.form_submit_button("Save changes", width="stretch")
-        remove = right.form_submit_button("Delete specimen", width="stretch")
+        save = left.form_submit_button(
+            "Save changes", width="stretch", on_click=stay_on_edit_tab
+        )
+        remove = right.form_submit_button(
+            "Delete specimen", width="stretch", on_click=stay_on_edit_tab
+        )
 
     if save:
         if not values["collection_code"] or not values["title"]:
@@ -57,4 +67,3 @@ def show_edit_form(db_path: Path) -> None:
     if remove:
         delete_specimen(specimen["id"], db_path)
         st.warning("Specimen deleted.")
-

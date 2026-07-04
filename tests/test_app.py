@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fossil_tracker.config import PROJECT_ROOT
 from ui.common import (
+    delete_managed_image_file,
     save_uploaded_document,
     save_uploaded_image,
     validate_related_link_url,
 )
-from ui.images import image_date_text
+from ui.images import image_date_text, image_licence_label, image_licence_options
 from ui.provenance import parse_acquisition_date
 
 
@@ -54,6 +56,42 @@ def test_save_uploaded_document_uses_configured_document_folder(tmp_path: Path, 
     assert path.read_bytes() == b"document-bytes"
 
 
+def test_delete_managed_image_file_removes_configured_image_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    image_folder = tmp_path / "images"
+    monkeypatch.setenv("FOSSIL_TRACKER_IMAGES", str(image_folder))
+    image_folder.mkdir()
+    image_path = image_folder / "FT-0001.jpg"
+    image_path.write_bytes(b"image-bytes")
+
+    assert delete_managed_image_file(str(image_path))
+    assert not image_path.exists()
+
+
+def test_delete_managed_image_file_ignores_unmanaged_files(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("FOSSIL_TRACKER_IMAGES", str(tmp_path / "images"))
+    unmanaged_path = tmp_path / "other" / "external.jpg"
+    unmanaged_path.parent.mkdir()
+    unmanaged_path.write_bytes(b"external-image")
+
+    assert not delete_managed_image_file(str(unmanaged_path))
+    assert unmanaged_path.read_bytes() == b"external-image"
+
+
+def test_delete_managed_image_file_handles_project_relative_image(monkeypatch) -> None:
+    monkeypatch.delenv("FOSSIL_TRACKER_IMAGES", raising=False)
+    image_path = PROJECT_ROOT / "data" / "images" / "delete-test.jpg"
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(b"image-bytes")
+
+    try:
+        assert delete_managed_image_file("data/images/delete-test.jpg")
+        assert not image_path.exists()
+    finally:
+        image_path.unlink(missing_ok=True)
+
+
 def test_validate_related_link_url_rejects_empty_and_incomplete_urls() -> None:
     assert validate_related_link_url("") == "URL is required."
     assert (
@@ -76,3 +114,10 @@ def test_parse_acquisition_date_accepts_iso_dates_only() -> None:
 def test_image_date_text_formats_optional_date() -> None:
     assert image_date_text(parse_acquisition_date("2026-07-04")) == "2026-07-04"
     assert image_date_text(None) == ""
+
+
+def test_image_licence_options_are_optional() -> None:
+    licences = [{"name": "CC BY 4.0"}, {"name": "CC0"}]
+    assert image_licence_options(licences) == ["", "CC BY 4.0", "CC0"]
+    assert image_licence_label("") == "Not recorded"
+    assert image_licence_label("CC0") == "CC0"

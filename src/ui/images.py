@@ -6,7 +6,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from fossil_tracker.db import create_specimen_image, get_specimen, list_specimens
+from fossil_tracker.db import create_specimen_image, get_specimen, list_licences, list_specimens
 from ui.common import (
     IMAGE_TYPE_OPTIONS,
     remember_default_specimen,
@@ -21,6 +21,18 @@ def image_date_text(value: object) -> str:
     """Return an ISO date string for an optional date picker value."""
 
     return value.isoformat() if value else ""
+
+
+def image_licence_options(licences: list[dict]) -> list[str]:
+    """Return optional image licence choices from reference data."""
+
+    return ["", *[row["name"] for row in licences]]
+
+
+def image_licence_label(value: str) -> str:
+    """Render an optional image licence choice."""
+
+    return value or "Not recorded"
 
 
 def show_images_and_notes(db_path: Path) -> None:
@@ -51,6 +63,7 @@ def show_images_and_notes(db_path: Path) -> None:
 
     st.subheader("Images")
     render_specimen_images(specimen["id"], db_path, allow_delete=True)
+    licence_options = image_licence_options(list_licences(db_path))
     with st.form("add-image", clear_on_submit=True):
         uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
         image_path = st.text_input("Image path")
@@ -63,7 +76,11 @@ def show_images_and_notes(db_path: Path) -> None:
             value=None,
             format="YYYY-MM-DD",
         )
-        licence = st.text_input("Licence")
+        licence = st.selectbox(
+            "Licence",
+            licence_options,
+            format_func=image_licence_label,
+        )
         image_notes = st.text_area("Image notes")
         add_image = st.form_submit_button("Add image")
 

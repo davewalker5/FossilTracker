@@ -93,8 +93,12 @@ def render_specimen_images(
             if image["notes"]:
                 st.markdown(image["notes"])
             if allow_delete and st.button("Delete image", key=f"delete-image-{image['id']}"):
+                file_deleted = delete_managed_image_file(image["image_path"])
                 delete_specimen_image(image["id"], db_path)
-                st.warning("Image deleted.")
+                if file_deleted:
+                    st.warning("Image record and uploaded file deleted.")
+                else:
+                    st.warning("Image record deleted. No managed uploaded file was removed.")
                 st.rerun()
 
 
@@ -384,6 +388,40 @@ def resolve_image_path(image_path: str) -> Path:
     if path.is_absolute():
         return path
     return PROJECT_ROOT / path
+
+
+def managed_image_file_path(image_path: str) -> Path | None:
+    """Return a deletable image path when it is inside the configured image folder.
+
+    :param image_path: Stored relative or absolute image path.
+    :return: Existing file path inside the image folder, or None.
+    """
+
+    path = resolve_image_path(image_path)
+    try:
+        resolved_path = path.resolve(strict=False)
+        resolved_image_dir = image_dir().resolve(strict=False)
+        resolved_path.relative_to(resolved_image_dir)
+    except ValueError:
+        return None
+
+    if resolved_path.is_file():
+        return resolved_path
+    return None
+
+
+def delete_managed_image_file(image_path: str) -> bool:
+    """Delete an image file only when it belongs to the configured image folder.
+
+    :param image_path: Stored relative or absolute image path.
+    :return: Whether a file was deleted.
+    """
+
+    path = managed_image_file_path(image_path)
+    if path is None:
+        return False
+    path.unlink()
+    return True
 
 
 def image_details(image: dict) -> str:

@@ -23,8 +23,6 @@ CREATE TABLE specimens (
     measurements TEXT,
     preparation_type_id INTEGER,
     storage_location TEXT,
-    public_notes TEXT,
-    private_notes TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -131,6 +129,7 @@ CREATE TABLE observations (
     notes TEXT NOT NULL,
     related_project TEXT,
     related_url TEXT,
+    public_visible INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
@@ -216,6 +215,7 @@ class DatabaseTests(unittest.TestCase):
                 "notes": "**Markdown** observation note.",
                 "related_project": "Shell morphology",
                 "related_url": "https://example.com/project",
+                "public_visible": True,
             },
             self.db_path,
         )
@@ -228,6 +228,7 @@ class DatabaseTests(unittest.TestCase):
         self.assertEqual(len(observations), 1)
         self.assertEqual(observations[0]["id"], observation_id)
         self.assertEqual(observations[0]["notes"], "**Markdown** observation note.")
+        self.assertEqual(observations[0]["public_visible"], 1)
 
         db.delete_specimen_image(image_id, self.db_path)
         db.delete_observation(observation_id, self.db_path)

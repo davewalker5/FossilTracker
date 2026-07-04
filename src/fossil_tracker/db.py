@@ -23,8 +23,6 @@ SPECIMEN_FIELDS = [
     "measurements",
     "preparation_type_id",
     "storage_location",
-    "public_notes",
-    "private_notes",
 ]
 
 IMAGE_FIELDS = [
@@ -45,6 +43,7 @@ OBSERVATION_FIELDS = [
     "notes",
     "related_project",
     "related_url",
+    "public_visible",
 ]
 
 TAXONOMY_FIELDS = [
@@ -749,6 +748,7 @@ def create_observation(values: dict[str, Any], db_path: Path | None = None) -> i
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
+    payload["public_visible"] = bool(payload.get("public_visible"))
     payload["created_at"] = now
     payload["updated_at"] = now
     fields = [*OBSERVATION_FIELDS, "created_at", "updated_at"]
@@ -777,6 +777,7 @@ def update_observation(
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
+    payload["public_visible"] = bool(payload.get("public_visible"))
     assignments = ", ".join(
         [f"{field} = ?" for field in [*OBSERVATION_FIELDS, "updated_at"]]
     )
@@ -948,7 +949,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "description": "Polished cross-section showing chamber structure.",
             "preparation_type_id": split_polished_id,
             "public_visible": True,
-            "public_notes": "Candidate public summary once provenance is documented.",
         },
         db_path=db_path,
     )

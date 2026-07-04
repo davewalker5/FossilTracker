@@ -133,7 +133,7 @@ def main() -> None:
             "Provenance",
             "Documents",
             "Images",
-            "Observation notes",
+            "Notes",
             "Related links",
             "Context",
         ]
@@ -627,7 +627,7 @@ def show_observation_notes(db_path: Path) -> None:
         st.warning("Selected specimen was not found.")
         return
 
-    st.subheader("Observation notes")
+    st.subheader("Notes")
     render_specimen_observations(specimen["id"], db_path, allow_delete=True)
     with st.form("add-observation", clear_on_submit=True):
         observation_meta = st.columns([1, 1, 1])
@@ -637,6 +637,7 @@ def show_observation_notes(db_path: Path) -> None:
         )
         related_project = observation_meta[2].text_input("Related project")
         related_url = st.text_input("Related URL")
+        public_visible = st.checkbox("Public")
         notes = st.text_area("Notes", height=180)
         add_observation = st.form_submit_button("Add observation")
 
@@ -652,6 +653,7 @@ def show_observation_notes(db_path: Path) -> None:
                 "notes": notes,
                 "related_project": related_project,
                 "related_url": related_url,
+                "public_visible": public_visible,
             },
             db_path,
         )
@@ -823,7 +825,7 @@ def render_specimen_observations(
             st.info("No observation notes recorded for this specimen.")
         return
 
-    st.markdown("**Observation notes**")
+    st.markdown("**Notes**")
     for observation in observations:
         heading = observation["observation_type"] or "Observation"
         if observation["observation_date"]:
@@ -837,6 +839,7 @@ def render_specimen_observations(
                 links.append(observation["related_url"])
             if links:
                 st.caption(" | ".join(links))
+            st.caption("Public" if observation["public_visible"] else "Private")
             if allow_delete and st.button(
                 "Delete observation", key=f"delete-observation-{observation['id']}"
             ):
@@ -968,8 +971,6 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
 
     values["description"] = st.text_area("Description", value=data.get("description", ""), key=f"{prefix}-description")
     values["measurements"] = st.text_input("Measurements", value=data.get("measurements", ""), key=f"{prefix}-measurements")
-    values["public_notes"] = st.text_area("Public notes", value=data.get("public_notes", ""), key=f"{prefix}-public")
-    values["private_notes"] = st.text_area("Private notes", value=data.get("private_notes", ""), key=f"{prefix}-private")
     return {field: values.get(field, "") for field in SPECIMEN_FIELDS}
 
 

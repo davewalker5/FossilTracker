@@ -19,6 +19,7 @@ from ui.images import (
     option_with_current,
     parse_image_date,
 )
+from ui.notes import observation_date_text
 from ui.provenance import parse_acquisition_date
 
 
@@ -137,3 +138,8 @@ def test_option_with_current_preserves_existing_selectbox_values() -> None:
     assert option_with_current(["", "CC0"], "CC0") == ["", "CC0"]
     assert option_index(["", "CC0"], "CC0") == 1
     assert option_index(["", "CC0"], "Missing") == 0
+
+
+def test_observation_date_text_formats_optional_date() -> None:
+    assert observation_date_text(parse_image_date("2026-07-04")) == "2026-07-04"
+    assert observation_date_text(None) == ""

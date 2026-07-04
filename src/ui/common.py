@@ -596,6 +596,35 @@ def render_preparation_type_table(records: list[dict]) -> None:
     )
 
 
+def render_licence_table(records: list[dict]) -> None:
+    """Render licence reference records as a scan-friendly table.
+
+    :param records: Licence rows to display.
+    """
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Licence name": row["name"] or "",
+                "Licence URL": row["url"] or "",
+                "Licence notes": row["notes"] or "",
+            }
+            for row in records
+        ],
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Licence name": st.column_config.TextColumn("Licence name", width="medium"),
+            "Licence URL": st.column_config.LinkColumn("Licence URL", width="medium"),
+            "Licence notes": st.column_config.TextColumn("Licence notes", width="large"),
+        },
+    )
+
+
 def render_measurement_type_table(records: list[dict]) -> None:
     """Render measurement type records as a scan-friendly table.
 

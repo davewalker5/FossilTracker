@@ -76,6 +76,15 @@ CREATE TABLE preparation_types (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE licences (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    notes TEXT,
+    url TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE measurement_types (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
@@ -479,6 +488,47 @@ def test_create_update_and_delete_measurement_type(db_path: Path) -> None:
 
     db.delete_measurement_type(measurement_type_id, db_path)
     assert db.list_measurement_types(db_path) == []
+
+
+def test_create_update_and_delete_licence(db_path: Path) -> None:
+    licence_id = db.create_licence(
+        {
+            "name": "CC BY 4.0",
+            "notes": "Attribution required.",
+            "url": "https://creativecommons.org/licenses/by/4.0/",
+        },
+        db_path,
+    )
+
+    licence = db.get_licence(licence_id, db_path)
+    assert licence["name"] == "CC BY 4.0"
+    assert licence["url"] == "https://creativecommons.org/licenses/by/4.0/"
+
+    db.update_licence(
+        licence_id,
+        {
+            "name": "CC BY-SA 4.0",
+            "notes": "Attribution and share-alike required.",
+            "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        },
+        db_path,
+    )
+    updated = db.get_licence(licence_id, db_path)
+    assert updated["name"] == "CC BY-SA 4.0"
+    assert updated["notes"] == "Attribution and share-alike required."
+
+    licences = db.list_licences(db_path)
+    assert [row["id"] for row in licences] == [licence_id]
+
+    db.delete_licence(licence_id, db_path)
+    assert db.get_licence(licence_id, db_path) is None
+    assert db.list_licences(db_path) == []
+
+
+def test_licence_name_is_unique_case_insensitive(db_path: Path) -> None:
+    db.create_licence({"name": "CC0"}, db_path)
+    with pytest.raises(sqlite3.IntegrityError):
+        db.create_licence({"name": "cc0"}, db_path)
 
 
 def test_measurement_type_name_is_unique_case_insensitive(db_path: Path) -> None:

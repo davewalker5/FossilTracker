@@ -82,6 +82,12 @@ PREPARATION_TYPE_FIELDS = [
     "description",
 ]
 
+LICENCE_FIELDS = [
+    "name",
+    "notes",
+    "url",
+]
+
 MEASUREMENT_TYPE_FIELDS = [
     "name",
     "unit",

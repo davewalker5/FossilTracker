@@ -10,21 +10,25 @@ import streamlit as st
 
 from fossil_tracker.db import (
     create_geological_age,
+    create_licence,
     create_locality,
     create_measurement_type,
     create_preparation_type,
     create_taxonomy,
     delete_geological_age,
+    delete_licence,
     delete_locality,
     delete_measurement_type,
     delete_preparation_type,
     delete_taxonomy,
     list_geological_ages,
+    list_licences,
     list_localities,
     list_measurement_types,
     list_preparation_types,
     list_taxonomy,
     update_geological_age,
+    update_licence,
     update_locality,
     update_measurement_type,
     update_preparation_type,
@@ -36,6 +40,7 @@ from ui.common import (
     locality_label,
     option_index,
     render_geological_age_table,
+    render_licence_table,
     render_locality_table,
     render_measurement_type_table,
     render_preparation_type_table,
@@ -50,8 +55,15 @@ def show_context_manager(db_path: Path) -> None:
     :param db_path: SQLite database path.
     """
 
-    taxonomy_tab, ages_tab, localities_tab, preparation_tab, measurement_tab = st.tabs(
-        ["Taxonomy", "Geological ages", "Localities", "Preparation types", "Measurement types"]
+    taxonomy_tab, ages_tab, localities_tab, preparation_tab, licensing_tab, measurement_tab = st.tabs(
+        [
+            "Taxonomy",
+            "Geological ages",
+            "Localities",
+            "Preparation types",
+            "Licensing",
+            "Measurement types",
+        ]
     )
 
     with taxonomy_tab:
@@ -65,6 +77,9 @@ def show_context_manager(db_path: Path) -> None:
 
     with preparation_tab:
         show_preparation_type_manager(db_path)
+
+    with licensing_tab:
+        show_licence_manager(db_path)
 
     with measurement_tab:
         show_measurement_type_manager(db_path)
@@ -408,6 +423,67 @@ def show_preparation_type_manager(db_path: Path) -> None:
         st.rerun()
 
 
+def show_licence_manager(db_path: Path) -> None:
+    """Render licence reference data management.
+
+    :param db_path: SQLite database path.
+    """
+
+    licences = list_licences(db_path)
+    st.subheader("Licensing")
+    render_licence_table(licences)
+
+    choices = {"New licence": None}
+    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in licences})
+    selected = st.selectbox("Licence", list(choices), key="licence-select")
+    selected_id = choices[selected]
+    selected_row = next((row for row in licences if row["id"] == selected_id), None)
+
+    with st.form(f"licence-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
+        name = st.text_input(
+            "Licence name",
+            value=(selected_row["name"] or "") if selected_row else "",
+            key=f"licence-name-{selected_id or 'new'}",
+        )
+        url = st.text_input(
+            "Licence URL",
+            value=(selected_row["url"] or "") if selected_row else "",
+            key=f"licence-url-{selected_id or 'new'}",
+        )
+        notes = st.text_area(
+            "Licence notes",
+            value=selected_row["notes"] if selected_row and selected_row["notes"] else "",
+            key=f"licence-notes-{selected_id or 'new'}",
+        )
+        save_col, delete_col = st.columns([1, 1])
+        save_licence = save_col.form_submit_button("Save licence")
+        remove_licence = delete_col.form_submit_button(
+            "Delete licence", disabled=selected_row is None
+        )
+
+    if save_licence:
+        if not name.strip():
+            st.error("Licence name is required.")
+            return
+        values = {"name": name.strip(), "notes": notes, "url": url.strip()}
+        try:
+            if selected_row is None:
+                create_licence(values, db_path)
+                st.success("Licence added.")
+            else:
+                update_licence(selected_row["id"], values, db_path)
+                st.success("Licence updated.")
+        except sqlite3.IntegrityError:
+            st.error("A licence with that name already exists.")
+            return
+        st.rerun()
+
+    if remove_licence and selected_row is not None:
+        delete_licence(selected_row["id"], db_path)
+        st.warning("Licence deleted.")
+        st.rerun()
+
+
 def show_measurement_type_manager(db_path: Path) -> None:
     """Render measurement type reference data management.
 
@@ -479,4 +555,3 @@ def show_measurement_type_manager(db_path: Path) -> None:
             return
         st.warning("Measurement type deleted.")
         st.rerun()
-

@@ -11,7 +11,14 @@ from ui.common import (
     save_uploaded_image,
     validate_related_link_url,
 )
-from ui.images import image_date_text, image_licence_label, image_licence_options
+from ui.images import (
+    image_date_text,
+    image_licence_label,
+    image_licence_options,
+    option_index,
+    option_with_current,
+    parse_image_date,
+)
 from ui.provenance import parse_acquisition_date
 
 
@@ -112,7 +119,9 @@ def test_parse_acquisition_date_accepts_iso_dates_only() -> None:
 
 
 def test_image_date_text_formats_optional_date() -> None:
-    assert image_date_text(parse_acquisition_date("2026-07-04")) == "2026-07-04"
+    assert parse_image_date("2026-07-04").isoformat() == "2026-07-04"
+    assert parse_image_date("04/07/2026") is None
+    assert image_date_text(parse_image_date("2026-07-04")) == "2026-07-04"
     assert image_date_text(None) == ""
 
 
@@ -121,3 +130,10 @@ def test_image_licence_options_are_optional() -> None:
     assert image_licence_options(licences) == ["", "CC BY 4.0", "CC0"]
     assert image_licence_label("") == "Not recorded"
     assert image_licence_label("CC0") == "CC0"
+
+
+def test_option_with_current_preserves_existing_selectbox_values() -> None:
+    assert option_with_current(["", "CC0"], "Private") == ["", "CC0", "Private"]
+    assert option_with_current(["", "CC0"], "CC0") == ["", "CC0"]
+    assert option_index(["", "CC0"], "CC0") == 1
+    assert option_index(["", "CC0"], "Missing") == 0

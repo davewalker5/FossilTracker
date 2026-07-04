@@ -92,14 +92,25 @@ def render_specimen_images(
                 st.caption(details)
             if image["notes"]:
                 st.markdown(image["notes"])
-            if allow_delete and st.button("Delete image", key=f"delete-image-{image['id']}"):
-                file_deleted = delete_managed_image_file(image["image_path"])
-                delete_specimen_image(image["id"], db_path)
-                if file_deleted:
-                    st.warning("Image record and uploaded file deleted.")
-                else:
-                    st.warning("Image record deleted. No managed uploaded file was removed.")
-                st.rerun()
+            if allow_delete:
+                edit_col, delete_col = st.columns([1, 1])
+                if edit_col.button(
+                    "Edit details", key=f"edit-image-{image['id']}", width="stretch"
+                ):
+                    st.session_state["editing_image_id"] = image["id"]
+                    st.rerun()
+                if delete_col.button(
+                    "Delete image", key=f"delete-image-{image['id']}", width="stretch"
+                ):
+                    file_deleted = delete_managed_image_file(image["image_path"])
+                    delete_specimen_image(image["id"], db_path)
+                    if st.session_state.get("editing_image_id") == image["id"]:
+                        st.session_state.pop("editing_image_id", None)
+                    if file_deleted:
+                        st.warning("Image record and uploaded file deleted.")
+                    else:
+                        st.warning("Image record deleted. No managed uploaded file was removed.")
+                    st.rerun()
 
 
 def render_specimen_observations(

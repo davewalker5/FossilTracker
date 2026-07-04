@@ -281,6 +281,24 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
     assert len(images) == 1
     assert images[0]["id"] == image_id
     assert images[0]["caption"] == "Overall view"
+    db.update_specimen_image(
+        image_id,
+        {
+            "specimen_id": specimen_id,
+            "image_path": "data/images/FT-2000.jpg",
+            "image_type": "Close-up",
+            "caption": "Updated close-up",
+            "photographer": "D. Walker",
+            "licence": "CC BY 4.0",
+            "date_taken": "2026-07-04",
+            "notes": "Updated image notes.",
+        },
+        db_path,
+    )
+    updated_images = db.list_specimen_images(specimen_id, db_path)
+    assert updated_images[0]["caption"] == "Updated close-up"
+    assert updated_images[0]["image_type"] == "Close-up"
+    assert updated_images[0]["licence"] == "CC BY 4.0"
     assert len(observations) == 1
     assert observations[0]["id"] == observation_id
     assert observations[0]["notes"] == "**Markdown** observation note."

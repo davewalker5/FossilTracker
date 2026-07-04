@@ -9,7 +9,13 @@ from urllib.parse import urlparse
 
 import streamlit as st
 
-from fossil_tracker.config import APP_NAME, PROJECT_ROOT, database_path, image_dir
+from fossil_tracker.config import (
+    APP_NAME,
+    PROJECT_ROOT,
+    database_path,
+    document_dir,
+    image_dir,
+)
 from fossil_tracker.db import (
     SPECIMEN_FIELDS,
     apply_migrations,
@@ -114,6 +120,7 @@ def main() -> None:
         tab_add,
         tab_edit,
         tab_provenance,
+        tab_documents,
         tab_images,
         tab_observations,
         tab_links,
@@ -124,6 +131,7 @@ def main() -> None:
             "Add specimen",
             "Edit specimen",
             "Provenance",
+            "Documents",
             "Images",
             "Observation notes",
             "Related links",
@@ -145,6 +153,9 @@ def main() -> None:
 
     with tab_provenance:
         show_provenance_manager(db_path)
+
+    with tab_documents:
+        show_acquisition_documents(db_path)
 
     with tab_images:
         show_images_and_notes(db_path)
@@ -394,12 +405,35 @@ def show_context_manager(db_path: Path) -> None:
 
 
 def show_provenance_manager(db_path: Path) -> None:
-    """Render acquisition and acquisition-document management forms.
+    """Render acquisition management and selected-specimen provenance details.
 
     :param db_path: SQLite database path.
     """
 
     acquisitions = list_acquisitions(db_path)
+    specimens = list_specimens(db_path)
+
+    if specimens:
+        specimen_choices = {
+            f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens
+        }
+        selected_specimen_label = st.selectbox(
+            "Specimen",
+            list(specimen_choices),
+            index=specimen_choice_index(specimens),
+            key="provenance-specimen",
+            on_change=remember_selected_specimen,
+            args=("provenance-specimen", specimen_choices),
+        )
+        remember_default_specimen(selected_specimen_label, specimen_choices)
+        specimen = get_specimen(specimen_choices[selected_specimen_label], db_path)
+        if specimen is None:
+            st.warning("Selected specimen was not found.")
+            return
+        render_specimen_provenance(specimen, db_path)
+    else:
+        st.info("Add a specimen before linking provenance records.")
+
     st.subheader("Acquisitions")
     render_reference_list([acquisition_label(row) for row in acquisitions])
 
@@ -437,29 +471,62 @@ def show_provenance_manager(db_path: Path) -> None:
         st.success("Acquisition added.")
         st.rerun()
 
-    if not acquisitions:
+
+def show_acquisition_documents(db_path: Path) -> None:
+    """Render acquisition document management for a specimen.
+
+    :param db_path: SQLite database path.
+    """
+
+    specimens = list_specimens(db_path)
+    if not specimens:
+        st.info("Add a specimen before attaching documents.")
         return
 
-    st.subheader("Acquisition documents")
-    choices = {acquisition_label(row): row["id"] for row in acquisitions}
-    selected = st.selectbox("Acquisition", list(choices), key="document-acquisition")
-    acquisition_id = choices[selected]
-    render_acquisition_documents(acquisition_id, db_path)
+    specimen_choices = {
+        f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens
+    }
+    selected_specimen_label = st.selectbox(
+        "Specimen",
+        list(specimen_choices),
+        index=specimen_choice_index(specimens),
+        key="acquisition-documents-specimen",
+        on_change=remember_selected_specimen,
+        args=("acquisition-documents-specimen", specimen_choices),
+    )
+    remember_default_specimen(selected_specimen_label, specimen_choices)
+    specimen = get_specimen(specimen_choices[selected_specimen_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
+
+    acquisition = get_acquisition(specimen["acquisition_id"], db_path)
+    if acquisition is None:
+        st.info("No acquisition is linked to this specimen. Link one from Edit specimen.")
+        return
+
+    st.subheader("Documents")
+    render_acquisition_documents(acquisition["id"], db_path)
     with st.form("add-acquisition-document", clear_on_submit=True):
+        uploaded = st.file_uploader("Upload document")
         document_path = st.text_input("Document path")
-        document_type = st.text_input("Document type")
-        title = st.text_input("Title")
+        document_meta = st.columns([1, 1])
+        document_type = document_meta[0].text_input("Document type")
+        title = document_meta[1].text_input("Title")
         document_notes = st.text_area("Document notes")
         add_document = st.form_submit_button("Add document")
 
     if add_document:
-        if not document_path.strip():
-            st.error("Document path is required.")
+        stored_path = document_path.strip()
+        if uploaded is not None:
+            stored_path = save_uploaded_document(uploaded, specimen)
+        if not stored_path:
+            st.error("Upload a document or enter a document path.")
             return
         create_acquisition_document(
             {
-                "acquisition_id": acquisition_id,
-                "document_path": document_path,
+                "acquisition_id": acquisition["id"],
+                "document_path": stored_path,
                 "document_type": document_type,
                 "title": title,
                 "notes": document_notes,
@@ -642,6 +709,41 @@ def show_related_links(db_path: Path) -> None:
         st.rerun()
 
 
+def render_specimen_provenance(specimen: dict, db_path: Path) -> None:
+    """Render provenance details for the selected specimen.
+
+    :param specimen: Selected specimen row.
+    :param db_path: SQLite database path.
+    """
+
+    acquisition = get_acquisition(specimen["acquisition_id"], db_path)
+    st.subheader("Selected specimen provenance")
+    if acquisition is None:
+        st.info("No acquisition is linked to this specimen. Link one from Edit specimen.")
+        return
+
+    details = st.columns([1, 1, 1])
+    details[0].markdown(f"**Source**  \n{_blank(acquisition['source_name'])}")
+    details[1].markdown(f"**Source type**  \n{_blank(acquisition['source_type'])}")
+    details[2].markdown(f"**Acquisition date**  \n{_blank(acquisition['acquisition_date'])}")
+
+    ethics = st.columns([1, 1])
+    ethics[0].markdown(f"**Ethical confidence**  \n{_blank(acquisition['ethical_confidence'])}")
+    seller_url = acquisition["seller_url"]
+    seller_display = f"[{seller_url}]({seller_url})" if seller_url else "Not recorded"
+    ethics[1].markdown(f"**Seller URL**  \n{seller_display}")
+
+    if acquisition["provenance_summary"]:
+        st.markdown("**Provenance summary**")
+        st.write(acquisition["provenance_summary"])
+    if acquisition["legality_notes"]:
+        st.markdown("**Legality notes**")
+        st.write(acquisition["legality_notes"])
+    if acquisition["notes"]:
+        st.markdown("**Private acquisition notes**")
+        st.write(acquisition["notes"])
+
+
 def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
     """Render documents linked to one acquisition.
 
@@ -651,7 +753,7 @@ def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
 
     documents = list_acquisition_documents(acquisition_id, db_path)
     if not documents:
-        st.info("No acquisition documents recorded.")
+        st.info("No documents recorded.")
         return
     for document in documents:
         label = document["title"] or document["document_path"]
@@ -887,6 +989,26 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
     destination.write_bytes(uploaded_file.getbuffer())
     try:
         # Keep default project-local uploads portable in CSV exports and Datasette views.
+        return str(destination.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(destination)
+
+
+def save_uploaded_document(uploaded_file, specimen: dict) -> str:
+    """Save an uploaded acquisition document and return its stored path.
+
+    :param uploaded_file: Streamlit uploaded file object.
+    :param specimen: Specimen row used for the filename prefix.
+    :return: Project-relative path when possible, otherwise absolute path.
+    """
+
+    storage_dir = document_dir()
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    collection_code = safe_filename(str(specimen["collection_code"]))
+    original_name = safe_filename(uploaded_file.name)
+    destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
+    destination.write_bytes(uploaded_file.getbuffer())
+    try:
         return str(destination.relative_to(PROJECT_ROOT))
     except ValueError:
         return str(destination)

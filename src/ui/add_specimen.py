@@ -6,8 +6,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import create_specimen
+from ui.common import specimen_inputs
+
 
 def show_add_form(db_path: Path) -> None:
     """Render the add-specimen form.
@@ -24,5 +25,4 @@ def show_add_form(db_path: Path) -> None:
             return
         specimen_id = create_specimen(values, db_path)
         st.success(f"Added specimen #{specimen_id}.")
-
 

@@ -6,8 +6,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import create_related_link, get_specimen, list_specimens
+from ui.common import (
+    remember_default_specimen,
+    remember_selected_specimen,
+    render_related_links,
+    specimen_choice_index,
+    validate_related_link_url,
+)
+
 
 def show_related_links(db_path: Path) -> None:
     """Render Field Notes link management for a specimen.
@@ -57,5 +64,4 @@ def show_related_links(db_path: Path) -> None:
         )
         st.success("Link added.")
         st.rerun()
-
 

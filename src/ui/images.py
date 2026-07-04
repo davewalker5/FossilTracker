@@ -6,8 +6,16 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import create_specimen_image, get_specimen, list_specimens
+from ui.common import (
+    IMAGE_TYPE_OPTIONS,
+    remember_default_specimen,
+    remember_selected_specimen,
+    render_specimen_images,
+    save_uploaded_image,
+    specimen_choice_index,
+)
+
 
 def show_images_and_notes(db_path: Path) -> None:
     """Render image management for a specimen.
@@ -71,5 +79,4 @@ def show_images_and_notes(db_path: Path) -> None:
         )
         st.success("Image added.")
         st.rerun()
-
 

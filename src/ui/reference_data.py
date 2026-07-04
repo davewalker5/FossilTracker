@@ -8,8 +8,41 @@ import sqlite3
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import (
+    create_geological_age,
+    create_locality,
+    create_measurement_type,
+    create_preparation_type,
+    create_taxonomy,
+    delete_geological_age,
+    delete_locality,
+    delete_measurement_type,
+    delete_preparation_type,
+    delete_taxonomy,
+    list_geological_ages,
+    list_localities,
+    list_measurement_types,
+    list_preparation_types,
+    list_taxonomy,
+    update_geological_age,
+    update_locality,
+    update_measurement_type,
+    update_preparation_type,
+    update_taxonomy,
+)
+from ui.common import (
+    CONFIDENCE_OPTIONS,
+    geological_age_label,
+    locality_label,
+    option_index,
+    render_geological_age_table,
+    render_locality_table,
+    render_measurement_type_table,
+    render_preparation_type_table,
+    render_taxonomy_table,
+    taxonomy_label,
+)
+
 
 def show_context_manager(db_path: Path) -> None:
     """Render taxonomy, locality, age, and preparation reference forms.
@@ -446,5 +479,4 @@ def show_measurement_type_manager(db_path: Path) -> None:
             return
         st.warning("Measurement type deleted.")
         st.rerun()
-
 

@@ -6,8 +6,23 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import (
+    create_acquisition,
+    get_acquisition,
+    get_specimen,
+    list_specimens,
+    update_acquisition,
+    update_specimen,
+)
+from ui.common import (
+    CONFIDENCE_OPTIONS,
+    SOURCE_TYPE_OPTIONS,
+    option_index,
+    remember_default_specimen,
+    remember_selected_specimen,
+    specimen_choice_index,
+)
+
 
 def show_provenance_manager(db_path: Path) -> None:
     """Render provenance management for the selected specimen.
@@ -122,5 +137,4 @@ def show_provenance_manager(db_path: Path) -> None:
             update_acquisition(acquisition["id"], values, db_path)
             st.success("Provenance updated.")
         st.rerun()
-
 

@@ -6,8 +6,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import create_acquisition_document, get_acquisition, get_specimen, list_specimens
+from ui.common import (
+    remember_default_specimen,
+    remember_selected_specimen,
+    render_acquisition_documents,
+    save_uploaded_document,
+    specimen_choice_index,
+)
+
 
 def show_acquisition_documents(db_path: Path) -> None:
     """Render acquisition document management for a specimen.
@@ -72,5 +79,4 @@ def show_acquisition_documents(db_path: Path) -> None:
         )
         st.success("Document added.")
         st.rerun()
-
 

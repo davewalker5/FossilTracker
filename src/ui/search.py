@@ -6,8 +6,9 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import list_specimens
+from ui.common import render_search_results
+
 
 def show_register(db_path: Path) -> None:
     """Render the searchable specimen register.
@@ -28,5 +29,4 @@ def show_register(db_path: Path) -> None:
         return
 
     render_search_results(specimens, db_path)
-
 

@@ -6,8 +6,15 @@ from pathlib import Path
 
 import streamlit as st
 
-from ui.common import *  # noqa: F403
-from fossil_tracker.db import *  # noqa: F403
+from fossil_tracker.db import create_observation, get_specimen, list_specimens
+from ui.common import (
+    OBSERVATION_TYPE_OPTIONS,
+    remember_default_specimen,
+    remember_selected_specimen,
+    render_specimen_observations,
+    specimen_choice_index,
+)
+
 
 def show_observation_notes(db_path: Path) -> None:
     """Render observation note management for a specimen.
@@ -67,5 +74,4 @@ def show_observation_notes(db_path: Path) -> None:
         )
         st.success("Observation added.")
         st.rerun()
-
 

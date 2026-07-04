@@ -17,7 +17,6 @@ from fossil_tracker.db import (
     delete_specimen_image,
     delete_specimen_measurement,
     get_acquisition,
-    get_geological_age,
     get_locality,
     list_acquisition_documents,
     list_geological_ages,
@@ -32,16 +31,6 @@ from fossil_tracker.db import (
 )
 
 CONFIDENCE_OPTIONS = ["Unknown", "Low", "Medium", "High"]
-PREPARATION_OPTIONS = [
-    "",
-    "Natural",
-    "Polished",
-    "Split and polished",
-    "Split",
-    "Matrix",
-    "Prepared",
-    "Cast",
-]
 IMAGE_TYPE_OPTIONS = ["", "Overall", "Close-up", "Matrix", "Label", "Comparison", "Other"]
 OBSERVATION_TYPE_OPTIONS = ["", "General", "Morphology", "Condition", "Measurement", "Research note", "Other"]
 SOURCE_TYPE_OPTIONS = ["", "Seller", "Collector", "Gift", "Field collection", "Auction", "Unknown", "Other"]
@@ -411,21 +400,6 @@ def image_details(image: dict) -> str:
     return " | ".join(str(part) for part in parts if part)
 
 
-def render_reference_list(labels: list[str]) -> None:
-    """Render a compact list of reference labels.
-
-    :param labels: Labels to display.
-    """
-
-    if not labels:
-        st.info("No records yet.")
-        return
-    for label in labels[:25]:
-        st.write(label)
-    if len(labels) > 25:
-        st.caption(f"{len(labels) - 25} more records not shown.")
-
-
 def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
     """Build one row for the Search results table.
 
@@ -452,36 +426,43 @@ def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
 
 
 def render_search_results(specimens: list[dict], db_path: Path) -> None:
-    """Render Search results with per-row edit actions.
+    """Render Search results with row selection for editing.
 
     :param specimens: Matching specimen rows.
     :param db_path: SQLite database path.
     """
 
-    widths = [1.2, 2.2, 1.4, 1.6, 1.2, 0.7]
-    headers = [
-        "Collection Code",
-        "Title",
-        "Common Name",
-        "Country/Region",
-        "Acquisition Date",
-        "",
+    rows = [
+        {
+            "Specimen Id": specimen["id"],
+            **search_result_row(specimen, db_path),
+        }
+        for specimen in specimens
     ]
-    header_cols = st.columns(widths)
-    for column, header in zip(header_cols, headers, strict=True):
-        column.markdown(f"**{header}**" if header else "")
+    event = st.dataframe(
+        rows,
+        hide_index=True,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+        key="specimen-search-results",
+        column_order=[
+            "Collection Code",
+            "Title",
+            "Common Name",
+            "Country/Region",
+            "Acquisition Date",
+        ],
+    )
 
-    for specimen in specimens:
-        row = search_result_row(specimen, db_path)
-        row_cols = st.columns(widths)
-        row_cols[0].write(row["Collection Code"])
-        row_cols[1].write(row["Title"])
-        row_cols[2].write(row["Common Name"])
-        row_cols[3].write(row["Country/Region"])
-        row_cols[4].write(row["Acquisition Date"])
-        if row_cols[5].button("Edit", key=f"edit-search-result-{specimen['id']}"):
-            st.session_state["current_specimen_id"] = specimen["id"]
-            st.success("Selected for editing. Open the Edit specimen tab.")
+    selected_rows = event.selection.rows
+    if not selected_rows:
+        return
+
+    selected_index = selected_rows[0]
+    st.session_state["current_specimen_id"] = int(rows[selected_index]["Specimen Id"])
+    st.session_state["pending_main_tab"] = "Edit specimen"
+    st.rerun()
 
 
 def render_taxonomy_table(records: list[dict]) -> None:
@@ -826,27 +807,6 @@ def geological_age_label(age: dict | None) -> str:
     return f"{label or 'Unnamed age'}{range_label}"
 
 
-def acquisition_label(acquisition: dict | None) -> str:
-    """Build a display label for an acquisition row.
-
-    :param acquisition: Acquisition row or None.
-    :return: Display label.
-    """
-
-    if not acquisition:
-        return ""
-    parts = [
-        acquisition["source_name"],
-        acquisition["source_type"],
-        acquisition["acquisition_date"],
-    ]
-    label = " - ".join(part for part in parts if part)
-    confidence = acquisition["ethical_confidence"]
-    if confidence and confidence != "Unknown":
-        label = f"{label} ({confidence})" if label else confidence
-    return label or "Unnamed acquisition"
-
-
 def _blank(value: object) -> str:
     """Render empty values consistently in the UI.
 
@@ -855,4 +815,3 @@ def _blank(value: object) -> str:
     """
 
     return str(value) if value else "Not recorded"
-

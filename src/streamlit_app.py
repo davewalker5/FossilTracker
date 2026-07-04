@@ -39,6 +39,10 @@ def main() -> None:
             added = seed_specimens(db_path)
             st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
 
+    pending_main_tab = st.session_state.pop("pending_main_tab", None)
+    if pending_main_tab is not None:
+        st.session_state["main_tabs"] = pending_main_tab
+
     (
         tab_register,
         tab_add,
@@ -62,7 +66,10 @@ def main() -> None:
             "Measurements",
             "Related links",
             "Reference Data",
-        ]
+        ],
+        key="main_tabs",
+        on_change="rerun",
+        default=pending_main_tab,
     )
 
     with tab_register:

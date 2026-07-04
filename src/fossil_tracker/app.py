@@ -206,38 +206,14 @@ def show_register(db_path: Path) -> None:
         st.info("No matching specimens yet.")
         return
 
-    for specimen in specimens:
-        title = f"{specimen['collection_code']} - {specimen['title']}"
-        with st.expander(title):
-            taxon = get_taxonomy(specimen["taxon_id"], db_path)
-            age = get_geological_age(specimen["geological_age_id"], db_path)
-            locality = get_locality(specimen["locality_id"], db_path)
-            acquisition = get_acquisition(specimen["acquisition_id"], db_path)
-            top = st.columns([1, 1, 1])
-            top[0].markdown(f"**Taxon**  \n{_blank(taxonomy_label(taxon))}")
-            top[1].markdown(f"**Age**  \n{_blank(geological_age_label(age))}")
-            top[2].markdown(f"**Locality**  \n{_blank(locality_label(locality))}")
-
-            provenance = st.columns([1, 1, 1, 1])
-            provenance[0].markdown(f"**Source**  \n{_blank(acquisition['source_name'] if acquisition else '')}")
-            provenance[1].markdown(f"**Ethical confidence**  \n{_blank(acquisition['ethical_confidence'] if acquisition else '')}")
-            provenance[2].markdown(
-                f"**Documents**  \n{'Available' if has_acquisition_documents(specimen['acquisition_id'], db_path) else 'Not recorded'}"
-            )
-            provenance[3].markdown(
-                f"**Public**  \n{'Yes' if specimen['public_visible'] else 'No'}"
-            )
-
-            if specimen["description"]:
-                st.markdown("**Description**")
-                st.write(specimen["description"])
-            if acquisition and (acquisition["provenance_summary"] or acquisition["legality_notes"]):
-                st.markdown("**Provenance and ethics**")
-                st.write(acquisition["provenance_summary"] or "")
-                st.write(acquisition["legality_notes"] or "")
-            render_related_links(specimen["id"], db_path)
-            render_specimen_images(specimen["id"], db_path)
-            render_specimen_observations(specimen["id"], db_path)
+    st.dataframe(
+        [
+            search_result_row(specimen, db_path)
+            for specimen in specimens
+        ],
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def show_add_form(db_path: Path) -> None:
@@ -1528,6 +1504,31 @@ def render_reference_list(labels: list[str]) -> None:
         st.write(label)
     if len(labels) > 25:
         st.caption(f"{len(labels) - 25} more records not shown.")
+
+
+def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
+    """Build one row for the Search results table.
+
+    :param specimen: Specimen row.
+    :param db_path: SQLite database path.
+    :return: Display row keyed by table column.
+    """
+
+    locality = get_locality(specimen["locality_id"], db_path)
+    acquisition = get_acquisition(specimen["acquisition_id"], db_path)
+    country_region = ""
+    if locality:
+        country_region = ", ".join(
+            part for part in [locality["country"], locality["region"]] if part
+        )
+
+    return {
+        "Collection Code": specimen["collection_code"] or "",
+        "Title": specimen["title"] or "",
+        "Common Name": specimen["common_name"] or "",
+        "Country/Region": country_region,
+        "Acquisition Date": acquisition["acquisition_date"] if acquisition else "",
+    }
 
 
 def render_taxonomy_table(records: list[dict]) -> None:

@@ -87,7 +87,6 @@ MEASUREMENT_TYPE_FIELDS = [
     "name",
     "unit",
     "description",
-    "active",
 ]
 
 ACQUISITION_FIELDS = [
@@ -821,7 +820,7 @@ def list_measurement_types(db_path: Path | None = None) -> list[sqlite3.Row]:
                 """
                 SELECT *
                 FROM measurement_types
-                ORDER BY active DESC, name COLLATE NOCASE
+                ORDER BY name COLLATE NOCASE
                 """
             )
         )
@@ -856,7 +855,6 @@ def create_measurement_type(
     """
 
     payload = _timestamped_payload(MEASUREMENT_TYPE_FIELDS, values)
-    payload["active"] = True if payload.get("active") is None else bool(payload.get("active"))
     return _insert_record(
         "measurement_types",
         [*MEASUREMENT_TYPE_FIELDS, "created_at", "updated_at"],
@@ -876,7 +874,6 @@ def update_measurement_type(
     """
 
     payload = _timestamped_payload(MEASUREMENT_TYPE_FIELDS, values)
-    payload["active"] = bool(payload.get("active"))
     assignments = ", ".join(
         [f"{field} = ?" for field in [*MEASUREMENT_TYPE_FIELDS, "updated_at"]]
     )
@@ -1259,7 +1256,7 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "locality_name": "Exact locality unknown",
             "country": "Madagascar",
             "locality_precision": "Country only",
-            "locality_notes": "Starter record. Replace with documented locality where possible.",
+            "locality_notes": "Unknown",
         },
         db_path,
     )
@@ -1267,9 +1264,9 @@ def seed_specimens(db_path: Path | None = None) -> int:
     split_polished_id = _find_preparation_type_id("Split and polished", db_path)
     ammonite_acquisition_id = create_acquisition(
         {
-            "source_name": "Unrecorded starter entry",
-            "provenance_summary": "Seed record. Replace with the real acquisition source and documentation.",
-            "legality_notes": "Unverified. Confirm export/import status and seller provenance.",
+            "source_name": "",
+            "provenance_summary": "",
+            "legality_notes": "",
             "ethical_confidence": "Unknown",
         },
         db_path,

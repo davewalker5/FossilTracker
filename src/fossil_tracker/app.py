@@ -682,7 +682,7 @@ def show_measurement_type_manager(db_path: Path) -> None:
     selected_row = next((row for row in measurement_types if row["id"] == selected_id), None)
 
     with st.form(f"measurement-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
-        form_cols = st.columns([2, 1, 1])
+        form_cols = st.columns([2, 1])
         name = form_cols[0].text_input(
             "Name",
             value=(selected_row["name"] or "") if selected_row else "",
@@ -692,11 +692,6 @@ def show_measurement_type_manager(db_path: Path) -> None:
             "Unit",
             value=selected_row["unit"] if selected_row else "",
             key=f"measurement-type-unit-{selected_id or 'new'}",
-        )
-        active = form_cols[2].checkbox(
-            "Active",
-            value=bool(selected_row["active"]) if selected_row else True,
-            key=f"measurement-type-active-{selected_id or 'new'}",
         )
         description = st.text_area(
             "Description",
@@ -721,7 +716,6 @@ def show_measurement_type_manager(db_path: Path) -> None:
                 "name": name.strip(),
                 "unit": unit.strip(),
                 "description": description,
-                "active": active,
             }
             if selected_row is None:
                 create_measurement_type(values, db_path)
@@ -1127,9 +1121,9 @@ def show_measurements(db_path: Path) -> None:
     st.subheader("Measurements")
     render_specimen_measurements(specimen["id"], db_path, allow_delete=True)
 
-    measurement_types = [row for row in list_measurement_types(db_path) if row["active"]]
+    measurement_types = list_measurement_types(db_path)
     if not measurement_types:
-        st.info("Add an active measurement type in Context before recording measurements.")
+        st.info("Add a measurement type in Context before recording measurements.")
         return
 
     type_choices = {f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types}
@@ -1681,7 +1675,6 @@ def render_measurement_type_table(records: list[dict]) -> None:
                 "Name": row["name"] or "",
                 "Unit": row["unit"] or "",
                 "Description": row["description"] or "",
-                "Active": "Yes" if row["active"] else "No",
             }
             for row in records
         ],

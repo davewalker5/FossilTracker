@@ -81,7 +81,6 @@ CREATE TABLE measurement_types (
     name TEXT NOT NULL COLLATE NOCASE UNIQUE,
     unit TEXT NOT NULL,
     description TEXT,
-    active INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -432,7 +431,6 @@ class DatabaseTests(unittest.TestCase):
         measurement_type = db.get_measurement_type(measurement_type_id, self.db_path)
         self.assertEqual(measurement_type["name"], "Umbilicus Diameter")
         self.assertEqual(measurement_type["unit"], "mm")
-        self.assertEqual(measurement_type["active"], 1)
 
         db.update_measurement_type(
             measurement_type_id,
@@ -440,14 +438,12 @@ class DatabaseTests(unittest.TestCase):
                 "name": "Umbilicus Width",
                 "unit": "mm",
                 "description": "Updated description.",
-                "active": False,
             },
             self.db_path,
         )
         updated = db.get_measurement_type(measurement_type_id, self.db_path)
         self.assertEqual(updated["name"], "Umbilicus Width")
         self.assertEqual(updated["description"], "Updated description.")
-        self.assertEqual(updated["active"], 0)
 
         measurement_types = db.list_measurement_types(self.db_path)
         self.assertEqual([row["id"] for row in measurement_types], [measurement_type_id])

@@ -15,8 +15,6 @@ Fossil Tracker is a lightweight application for recording, managing and explorin
 
 Rather than simply maintaining an inventory, the project aims to create a permanent record for each specimen, capturing not only its identity but also its provenance, geological context, taxonomy, morphology and the observations made during its study.
 
-The application forms part of the wider Field Notes project, where computational modelling, natural history and palaeontology are explored through a combination of software, field observations and written articles.
-
 Current features include:
 
 - Structured specimen catalogue

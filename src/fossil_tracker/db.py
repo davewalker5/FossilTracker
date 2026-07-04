@@ -23,7 +23,6 @@ SPECIMEN_FIELDS = [
     "measurements",
     "preparation_type_id",
     "storage_location",
-    "field_notes_links",
     "public_notes",
     "private_notes",
 ]
@@ -106,6 +105,11 @@ ACQUISITION_DOCUMENT_FIELDS = [
     "document_type",
     "title",
     "notes",
+]
+
+RELATED_LINK_FIELDS = [
+    "specimen_id",
+    "url",
 ]
 
 
@@ -797,6 +801,60 @@ def delete_observation(observation_id: int, db_path: Path | None = None) -> None
         connection.commit()
 
 
+def list_related_links(
+    specimen_id: int, db_path: Path | None = None
+) -> list[sqlite3.Row]:
+    """List Field Notes links for one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: Optional SQLite database path.
+    :return: Related link rows linked to the specimen.
+    """
+
+    with connect(db_path) as connection:
+        return list(
+            connection.execute(
+                """
+                SELECT *
+                FROM specimen_related_links
+                WHERE specimen_id = ?
+                ORDER BY created_at DESC, id DESC
+                """,
+                (specimen_id,),
+            )
+        )
+
+
+def create_related_link(values: dict[str, Any], db_path: Path | None = None) -> int:
+    """Create a Field Notes link record.
+
+    :param values: Related link field values.
+    :param db_path: Optional SQLite database path.
+    :return: New related link id.
+    """
+
+    payload = _timestamped_payload(RELATED_LINK_FIELDS, values)
+    payload["specimen_id"] = _optional_int(payload.get("specimen_id"))
+    return _insert_record(
+        "specimen_related_links",
+        [*RELATED_LINK_FIELDS, "created_at", "updated_at"],
+        payload,
+        db_path,
+    )
+
+
+def delete_related_link(link_id: int, db_path: Path | None = None) -> None:
+    """Delete one Field Notes link record.
+
+    :param link_id: Related link primary key.
+    :param db_path: Optional SQLite database path.
+    """
+
+    with connect(db_path) as connection:
+        connection.execute("DELETE FROM specimen_related_links WHERE id = ?", (link_id,))
+        connection.commit()
+
+
 def export_csv(destination: Path, db_path: Path | None = None) -> None:
     """Export the register to CSV for long-term portability.
 
@@ -890,7 +948,6 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "description": "Polished cross-section showing chamber structure.",
             "preparation_type_id": split_polished_id,
             "public_visible": True,
-            "field_notes_links": "Shell morphology",
             "public_notes": "Candidate public summary once provenance is documented.",
         },
         db_path=db_path,

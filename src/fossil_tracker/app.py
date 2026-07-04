@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 import streamlit as st
 
@@ -18,11 +19,13 @@ from fossil_tracker.db import (
     create_locality,
     create_observation,
     create_preparation_type,
+    create_related_link,
     create_specimen_image,
     create_specimen,
     create_taxonomy,
     delete_acquisition_document,
     delete_observation,
+    delete_related_link,
     delete_specimen_image,
     delete_specimen,
     export_csv,
@@ -38,6 +41,7 @@ from fossil_tracker.db import (
     list_localities,
     list_observations,
     list_preparation_types,
+    list_related_links,
     list_specimen_images,
     list_specimens,
     list_taxonomy,
@@ -105,8 +109,16 @@ def main() -> None:
         )
         export_path.unlink(missing_ok=True)
 
-    tab_register, tab_add, tab_edit, tab_context, tab_provenance, tab_notes = st.tabs(
-        ["Register", "Add specimen", "Edit specimen", "Context", "Provenance", "Images and notes"]
+    tab_register, tab_add, tab_edit, tab_context, tab_provenance, tab_notes, tab_links = st.tabs(
+        [
+            "Register",
+            "Add specimen",
+            "Edit specimen",
+            "Context",
+            "Provenance",
+            "Images and notes",
+            "Related links",
+        ]
     )
 
     with tab_register:
@@ -126,6 +138,9 @@ def main() -> None:
 
     with tab_notes:
         show_images_and_notes(db_path)
+
+    with tab_links:
+        show_related_links(db_path)
 
 
 def show_register(db_path: Path) -> None:
@@ -175,9 +190,7 @@ def show_register(db_path: Path) -> None:
                 st.markdown("**Provenance and ethics**")
                 st.write(acquisition["provenance_summary"] or "")
                 st.write(acquisition["legality_notes"] or "")
-            if specimen["field_notes_links"]:
-                st.markdown("**Field Notes links**")
-                st.write(specimen["field_notes_links"])
+            render_related_links(specimen["id"], db_path)
             render_specimen_images(specimen["id"], db_path)
             render_specimen_observations(specimen["id"], db_path)
 
@@ -211,7 +224,15 @@ def show_edit_form(db_path: Path) -> None:
         return
 
     choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
-    selected_label = st.selectbox("Specimen", list(choices))
+    selected_label = st.selectbox(
+        "Specimen",
+        list(choices),
+        index=specimen_choice_index(specimens),
+        key="edit-specimen-select",
+        on_change=remember_selected_specimen,
+        args=("edit-specimen-select", choices),
+    )
+    remember_default_specimen(selected_label, choices)
     specimen = get_specimen(choices[selected_label], db_path)
     if specimen is None:
         st.warning("Selected specimen was not found.")
@@ -448,7 +469,15 @@ def show_images_and_notes(db_path: Path) -> None:
         return
 
     choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
-    selected_label = st.selectbox("Specimen", list(choices), key="media-specimen")
+    selected_label = st.selectbox(
+        "Specimen",
+        list(choices),
+        index=specimen_choice_index(specimens),
+        key="media-specimen",
+        on_change=remember_selected_specimen,
+        args=("media-specimen", choices),
+    )
+    remember_default_specimen(selected_label, choices)
     specimen = get_specimen(choices[selected_label], db_path)
     if specimen is None:
         st.warning("Selected specimen was not found.")
@@ -520,6 +549,56 @@ def show_images_and_notes(db_path: Path) -> None:
             db_path,
         )
         st.success("Observation added.")
+        st.rerun()
+
+
+def show_related_links(db_path: Path) -> None:
+    """Render Field Notes link management for a specimen.
+
+    :param db_path: SQLite database path.
+    """
+
+    specimens = list_specimens(db_path)
+    if not specimens:
+        st.info("Add a specimen before attaching related links.")
+        return
+
+    choices = {f"{row['collection_code']} - {row['title']}": row["id"] for row in specimens}
+    selected_label = st.selectbox(
+        "Specimen",
+        list(choices),
+        index=specimen_choice_index(specimens),
+        key="related-links-specimen",
+        on_change=remember_selected_specimen,
+        args=("related-links-specimen", choices),
+    )
+    remember_default_specimen(selected_label, choices)
+    specimen = get_specimen(choices[selected_label], db_path)
+    if specimen is None:
+        st.warning("Selected specimen was not found.")
+        return
+
+    st.subheader("Related links")
+    render_related_links(specimen["id"], db_path, allow_delete=True)
+
+    with st.form("add-related-link", clear_on_submit=True):
+        url = st.text_input("URL")
+        add_link = st.form_submit_button("Add link")
+
+    if add_link:
+        cleaned_url = url.strip()
+        error = validate_related_link_url(cleaned_url)
+        if error:
+            st.error(error)
+            return
+        create_related_link(
+            {
+                "specimen_id": specimen["id"],
+                "url": cleaned_url,
+            },
+            db_path,
+        )
+        st.success("Link added.")
         st.rerun()
 
 
@@ -624,6 +703,45 @@ def render_specimen_observations(
                 st.rerun()
 
 
+def render_related_links(
+    specimen_id: int, db_path: Path, allow_delete: bool = False
+) -> None:
+    """Render Field Notes links linked to one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param db_path: SQLite database path.
+    :param allow_delete: Whether delete controls should be shown.
+    """
+
+    links = list_related_links(specimen_id, db_path)
+    if not links:
+        if allow_delete:
+            st.info("No related links recorded for this specimen.")
+        return
+
+    st.markdown("**Field Notes links**")
+    for link in links:
+        if allow_delete:
+            link_col, action_col = st.columns([5, 1])
+            link_col.markdown(f"[{link['url']}]({link['url']})")
+            if action_col.button("Delete", key=f"delete-related-link-{link['id']}"):
+                st.session_state["pending_related_link_delete"] = link["id"]
+                st.rerun()
+
+            if st.session_state.get("pending_related_link_delete") == link["id"]:
+                confirm_col, cancel_col = st.columns([1, 1])
+                if confirm_col.button("Confirm delete", key=f"confirm-related-link-{link['id']}"):
+                    delete_related_link(link["id"], db_path)
+                    st.session_state.pop("pending_related_link_delete", None)
+                    st.warning("Link deleted.")
+                    st.rerun()
+                if cancel_col.button("Cancel", key=f"cancel-related-link-{link['id']}"):
+                    st.session_state.pop("pending_related_link_delete", None)
+                    st.rerun()
+        else:
+            st.markdown(f"- [{link['url']}]({link['url']})")
+
+
 def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | None = None) -> dict:
     """Render shared specimen input controls.
 
@@ -710,10 +828,6 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     values["measurements"] = st.text_input("Measurements", value=data.get("measurements", ""), key=f"{prefix}-measurements")
     values["public_notes"] = st.text_area("Public notes", value=data.get("public_notes", ""), key=f"{prefix}-public")
     values["private_notes"] = st.text_area("Private notes", value=data.get("private_notes", ""), key=f"{prefix}-private")
-    values["field_notes_links"] = st.text_area(
-        "Field Notes links", value=data.get("field_notes_links", ""), key=f"{prefix}-links"
-    )
-
     return {field: values.get(field, "") for field in SPECIMEN_FIELDS}
 
 
@@ -855,6 +969,63 @@ def record_option_label(value: int | None, records: list[dict], label_func) -> s
         if record["id"] == value:
             return label_func(record)
     return "Not recorded"
+
+
+def specimen_choice_index(specimens: list[dict]) -> int:
+    """Return the specimen selectbox index for the current session specimen.
+
+    :param specimens: Specimen rows containing id values.
+    :return: Selectbox index.
+    """
+
+    current_id = st.session_state.get("current_specimen_id")
+    if current_id in {None, ""}:
+        return 0
+    ids = [row["id"] for row in specimens]
+    try:
+        return ids.index(int(current_id))
+    except (ValueError, TypeError):
+        return 0
+
+
+def remember_selected_specimen(widget_key: str, choices: dict[str, int]) -> None:
+    """Store the specimen id chosen in a selectbox callback.
+
+    :param widget_key: Selectbox session-state key.
+    :param choices: Mapping of selectbox labels to specimen ids.
+    """
+
+    selected_label = st.session_state.get(widget_key)
+    if selected_label in choices:
+        st.session_state["current_specimen_id"] = choices[selected_label]
+
+
+def remember_default_specimen(selected_label: str, choices: dict[str, int]) -> None:
+    """Initialize the current specimen id when no prior selection exists.
+
+    :param selected_label: Currently selected selectbox label.
+    :param choices: Mapping of selectbox labels to specimen ids.
+    """
+
+    if "current_specimen_id" not in st.session_state and selected_label in choices:
+        st.session_state["current_specimen_id"] = choices[selected_label]
+
+
+def validate_related_link_url(url: str) -> str | None:
+    """Validate a related link URL enough to catch obvious mistakes.
+
+    :param url: Trimmed URL value.
+    :return: Error message, or None when valid.
+    """
+
+    if not url:
+        return "URL is required."
+    if re.search(r"\s", url):
+        return "URL cannot contain spaces."
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return "Enter a full URL starting with http:// or https://."
+    return None
 
 
 def taxonomy_label(taxon: dict | None) -> str:

@@ -23,7 +23,6 @@ CREATE TABLE specimens (
     measurements TEXT,
     preparation_type_id INTEGER,
     storage_location TEXT,
-    field_notes_links TEXT,
     public_notes TEXT,
     private_notes TEXT,
     created_at TEXT NOT NULL,
@@ -136,6 +135,15 @@ CREATE TABLE observations (
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
 );
+
+CREATE TABLE specimen_related_links (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    specimen_id INTEGER NOT NULL,
+    url TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
+);
 """
 
 
@@ -225,6 +233,42 @@ class DatabaseTests(unittest.TestCase):
         db.delete_observation(observation_id, self.db_path)
         self.assertEqual(db.list_specimen_images(specimen_id, self.db_path), [])
         self.assertEqual(db.list_observations(specimen_id, self.db_path), [])
+
+    def test_create_related_links_and_cascade_delete(self) -> None:
+        specimen_id = db.create_specimen(
+            {
+                "collection_code": "FT-2500",
+                "title": "Related links test",
+            },
+            self.db_path,
+        )
+        first_link_id = db.create_related_link(
+            {
+                "specimen_id": specimen_id,
+                "url": "https://fieldnotes.example/first",
+            },
+            self.db_path,
+        )
+        db.create_related_link(
+            {
+                "specimen_id": specimen_id,
+                "url": "https://fieldnotes.example/second",
+            },
+            self.db_path,
+        )
+
+        links = db.list_related_links(specimen_id, self.db_path)
+        self.assertEqual(len(links), 2)
+        self.assertEqual(links[1]["id"], first_link_id)
+        self.assertEqual(links[1]["url"], "https://fieldnotes.example/first")
+
+        db.delete_related_link(first_link_id, self.db_path)
+        links = db.list_related_links(specimen_id, self.db_path)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0]["url"], "https://fieldnotes.example/second")
+
+        db.delete_specimen(specimen_id, self.db_path)
+        self.assertEqual(db.list_related_links(specimen_id, self.db_path), [])
 
     def test_create_context_records_and_link_specimen(self) -> None:
         taxon_id = db.create_taxonomy(

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fossil_tracker.app import (
+from ui.common import (
     save_uploaded_document,
     save_uploaded_image,
     validate_related_link_url,
@@ -63,4 +63,3 @@ def test_validate_related_link_url_rejects_empty_and_incomplete_urls() -> None:
         == "URL cannot contain spaces."
     )
     assert validate_related_link_url("https://fieldnotes.example/page") is None
-

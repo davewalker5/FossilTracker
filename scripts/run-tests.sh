@@ -5,4 +5,5 @@ cd "$PROJECT_ROOT"
 
 . venv/bin/activate
 
-streamlit run src/streamlit_app.py
+export PYTHONPATH="$PROJECT_ROOT/src"
+python -m pytest tests

@@ -22,9 +22,12 @@ dev = [
 [project.scripts]
 fossil-tracker = "fossil_tracker.cli:main"
 
+[tool.setuptools]
+py-modules = ["streamlit_app"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["fossil_tracker*"]
+include = ["fossil_tracker*", "ui*"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

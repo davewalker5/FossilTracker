@@ -1,0 +1,224 @@
+.specimen-record {
+    box-sizing: border-box;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+    color: #2f2d29;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 1rem;
+    line-height: 1.55;
+    background: #fff;
+}
+
+.specimen-record *,
+.specimen-record *::before,
+.specimen-record *::after {
+    box-sizing: inherit;
+}
+
+.specimen-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid #36332e;
+}
+
+.specimen-code {
+    margin: 0 0 0.35rem;
+    color: #676058;
+    font-size: 0.82rem;
+    letter-spacing: 0;
+    text-transform: uppercase;
+}
+
+.specimen-header h1 {
+    margin: 0;
+    color: #24221f;
+    font-size: 2.45rem;
+    font-weight: 600;
+    line-height: 1.08;
+}
+
+.specimen-subtitle {
+    max-width: 42rem;
+    margin: 0.75rem 0 0;
+    color: #57514a;
+    font-size: 1.08rem;
+}
+
+.specimen-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 1rem;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.65rem;
+    padding: 0.16rem 0.6rem;
+    border: 1px solid #9c9388;
+    border-radius: 999px;
+    color: #38342f;
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+.badge-warning {
+    border-color: #8b6516;
+    color: #6f4f0f;
+    background: #fbf5e7;
+}
+
+.badge-muted {
+    border-color: #c7c0b8;
+    color: #686159;
+    background: #f7f6f4;
+}
+
+.specimen-record section {
+    margin: 2rem 0;
+}
+
+.specimen-record h2,
+.specimen-record h3 {
+    color: #2a2723;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.specimen-record h2 {
+    margin: 0 0 0.85rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid #d7d1ca;
+    font-size: 1.45rem;
+}
+
+.specimen-record h3 {
+    margin: 1.3rem 0 0.5rem;
+    font-size: 1.12rem;
+}
+
+.specimen-record p,
+.specimen-record ul,
+.specimen-record ol {
+    margin-top: 0;
+}
+
+.specimen-record table {
+    width: 100%;
+    margin: 1rem 0 2rem;
+    border-collapse: collapse;
+    font-size: 0.95rem;
+}
+
+.specimen-record th,
+.specimen-record td {
+    padding: 0.5rem 0.65rem;
+    border-bottom: 1px solid #ddd8d2;
+    vertical-align: top;
+}
+
+.specimen-record th {
+    color: #312e2a;
+    text-align: left;
+    background: #f4f2ef;
+}
+
+.specimen-record td:first-child {
+    width: 32%;
+    color: #57514a;
+}
+
+.specimen-figure {
+    margin: 2rem 0;
+}
+
+.specimen-figure img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid #d7d1ca;
+    background: #f7f6f4;
+}
+
+.specimen-figure figcaption {
+    margin-top: 0.55rem;
+    color: #57514a;
+    font-size: 0.86rem;
+    font-style: italic;
+    line-height: 1.45;
+}
+
+.specimen-note {
+    margin: 1.5rem 0;
+    padding: 0.75rem 1rem;
+    border-left: 4px solid #6f6a62;
+    background: #f6f4f1;
+}
+
+.specimen-note strong {
+    color: #292621;
+}
+
+.specimen-note-warning {
+    border-left-color: #8b6516;
+    background: #fbf5e7;
+}
+
+.specimen-related-links a {
+    color: #4d5f72;
+}
+
+@media print {
+    body {
+        font-size: 11pt;
+        line-height: 1.4;
+    }
+
+    .specimen-record {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        color: #000;
+    }
+
+    .specimen-header {
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+
+    .specimen-record h1,
+    .specimen-record h2,
+    .specimen-record h3 {
+        break-after: avoid;
+        page-break-after: avoid;
+    }
+
+    .specimen-record table,
+    .specimen-record figure,
+    .specimen-note {
+        break-inside: avoid;
+        page-break-inside: avoid;
+    }
+
+    .specimen-figure img {
+        max-height: 22cm;
+        object-fit: contain;
+    }
+
+    .badge {
+        border-color: #777;
+        color: #000;
+        background: transparent;
+    }
+
+    .specimen-record a {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .specimen-record a[href]::after {
+        content: "";
+    }
+}

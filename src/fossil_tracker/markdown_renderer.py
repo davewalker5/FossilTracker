@@ -8,6 +8,7 @@ import re
 from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import date, datetime
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -89,27 +90,31 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
     """
 
     output_dir = output_path.parent if output_path else None
-    sections: list[str] = [_title(record), _summary_table(record)]
+    sections: list[str] = [
+        _specimen_header(record),
+        _section("specimen-summary", _summary_table(record)),
+    ]
 
     sections.extend(
         section
         for section in [
-            _overview(record),
+            _section("specimen-overview", _overview(record)),
             _primary_image(record, output_dir),
-            _measurements(record),
-            _identification(record),
-            _geological_context(record),
-            _observations(record),
-            _provenance(record),
+            _section("specimen-measurements", _measurements(record)),
+            _section("specimen-identification", _identification(record)),
+            _section("specimen-geology", _geological_context(record)),
+            _section("specimen-observations", _observations(record)),
+            _section("specimen-provenance", _provenance(record)),
             _image_gallery(record, output_dir),
-            _related_links(record),
-            _documents(record),
-            _record_metadata(record),
+            _section("specimen-related-links", _related_links(record)),
+            _section("specimen-documents", _documents(record)),
+            _section("specimen-metadata", _record_metadata(record)),
         ]
         if section
     )
 
-    return "\n\n".join(section for section in sections if section).rstrip() + "\n"
+    body = "\n\n".join(section for section in sections if section).rstrip()
+    return f'<article class="specimen-record">\n\n{body}\n\n</article>\n'
 
 
 def render_specimen_file(input_path: Path, output_path: Path | None = None) -> Path:
@@ -141,18 +146,100 @@ def _items(value: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _title(record: SpecimenRecord) -> str:
-    """Build the top-level Markdown title for a specimen.
+def _specimen_header(record: SpecimenRecord) -> str:
+    """Build the semantic specimen title block.
 
     :param record: Specimen record containing title and collection code fields.
-    :return: Markdown H1 title line.
+    :return: HTML header block for the specimen.
     """
 
     code = _clean(record.specimen.get("collection_code"))
     title = _clean(record.specimen.get("title"))
-    if code and title:
-        return f"# {code} \u2014 {title}"
-    return f"# {code or title or 'Specimen'}"
+    heading = title or code or "Specimen"
+    subtitle = _specimen_subtitle(record)
+    parts = ['<header class="specimen-header">']
+    if code:
+        parts.append(f'<p class="specimen-code">{_escape_html_text(code)}</p>')
+    parts.append(f"<h1>{_escape_html_text(heading)}</h1>")
+    if subtitle:
+        parts.append(f'<p class="specimen-subtitle">{_escape_html_text(subtitle)}</p>')
+    badges = _specimen_badges(record)
+    if badges:
+        parts.append(badges)
+    parts.append("</header>")
+    return "\n".join(parts)
+
+
+def _specimen_subtitle(record: SpecimenRecord) -> str:
+    """Build a concise natural-history subtitle from key context fields.
+
+    :param record: Specimen record containing age, locality, and preparation fields.
+    :return: Hyphen-separated subtitle text, or an empty string.
+    """
+
+    geological_age = _geological_age_summary(record) or _clean(record.geological_age.get("era"))
+    locality = _locality_summary(record) or _clean(record.locality.get("country"))
+    preparation = _clean(record.specimen.get("preparation_type"))
+    return " - ".join(value for value in [geological_age, locality, preparation] if value)
+
+
+def _specimen_badges(record: SpecimenRecord) -> str:
+    """Build status badges for fast visual context.
+
+    :param record: Specimen record containing age, locality, and taxonomy data.
+    :return: HTML badge container, or an empty string.
+    """
+
+    badges: list[tuple[str, str]] = []
+    period = _clean(record.geological_age.get("period"))
+    country = _clean(record.locality.get("country"))
+    locality_precision = _clean(record.locality.get("locality_precision"))
+
+    if period:
+        badges.append(("badge", period))
+    if country:
+        badges.append(("badge", country))
+    if _identification_is_provisional(record):
+        badges.append(("badge badge-warning", "Identification provisional"))
+    if locality_precision:
+        badges.append(("badge badge-muted", f"Locality precision: {locality_precision}"))
+
+    if not badges:
+        return ""
+
+    badge_items = [
+        f'<span class="{classes}">{_escape_html_text(label)}</span>'
+        for classes, label in badges
+    ]
+    return '<div class="specimen-badges">\n' + "\n".join(badge_items) + "\n</div>"
+
+
+def _identification_is_provisional(record: SpecimenRecord) -> bool:
+    """Infer whether the taxonomic identification should be flagged as provisional.
+
+    :param record: Specimen record containing taxonomy data.
+    :return: True when the identification is incomplete or explicitly undetermined.
+    """
+
+    taxonomy_keys = [
+        "kingdom",
+        "phylum",
+        "class_name",
+        "order_name",
+        "family",
+        "genus",
+        "species",
+        "identification_notes",
+    ]
+    if not any(_present(record.taxonomy.get(key)) for key in taxonomy_keys):
+        return False
+    if _present(record.taxonomy.get("identification_notes")):
+        return True
+    for key in ["family", "genus", "species"]:
+        value = _clean(record.taxonomy.get(key)).lower()
+        if value in {"undetermined", "unknown", "indet.", "indet", "cf.", "aff."}:
+            return True
+    return not any(_present(record.taxonomy.get(key)) for key in ["genus", "species"])
 
 
 def _summary_table(record: SpecimenRecord) -> str:
@@ -198,7 +285,7 @@ def _primary_image(record: SpecimenRecord, output_dir: Path | None) -> str:
 
     if not record.images:
         return ""
-    image = _render_image(record.images[0], output_dir)
+    image = _render_image(record.images[0], output_dir, is_primary=True)
     if not image:
         return ""
     return f"## Primary Image\n\n{image}"
@@ -230,7 +317,7 @@ def _identification(record: SpecimenRecord) -> str:
     if rows:
         parts.append(_table(["Rank", "Taxon"], rows))
     if notes:
-        parts.append(notes)
+        parts.append(_callout("Identification note.", notes, "specimen-note-warning"))
     return "\n\n".join(parts) if len(parts) > 1 else ""
 
 
@@ -411,12 +498,18 @@ def _record_metadata(record: SpecimenRecord) -> str:
     return f"## Record Metadata\n\n{_table(['Field', 'Value'], populated)}"
 
 
-def _render_image(image: dict[str, Any], output_dir: Path | None) -> str:
+def _render_image(
+    image: dict[str, Any],
+    output_dir: Path | None,
+    *,
+    is_primary: bool = False,
+) -> str:
     """Render one image and its metadata as Markdown.
 
     :param image: Image metadata dictionary from the export.
     :param output_dir: Optional output directory used to make the image path relative.
-    :return: Markdown image block, or an empty string when no path exists.
+    :param is_primary: When true, add the primary-image styling hook.
+    :return: HTML figure block, or an empty string when no path exists.
     """
 
     stored_path = _clean(image.get("image_path") or image.get("path"))
@@ -425,7 +518,14 @@ def _render_image(image: dict[str, Any], output_dir: Path | None) -> str:
     path = _markdown_image_path(stored_path, output_dir)
     caption = _clean(image.get("caption"))
     alt = caption or Path(stored_path).stem
-    parts = [f"![{_escape_image_text(alt)}]({path})"]
+    classes = "specimen-figure"
+    if is_primary:
+        classes = f"{classes} specimen-primary-image"
+    parts = [
+        f'<figure class="{classes}">',
+        "",
+        f'<img src="{_escape_html_attr(path)}" alt="{_escape_html_attr(alt)}">',
+    ]
     metadata = [
         caption,
         _label_value("Type", image.get("image_type")),
@@ -435,8 +535,16 @@ def _render_image(image: dict[str, Any], output_dir: Path | None) -> str:
     ]
     metadata = [_clean(value) for value in metadata if _present(value)]
     if metadata:
-        parts.append(f"*{'; '.join(metadata)}*")
-    return "\n\n".join(parts)
+        parts.extend(
+            [
+                "",
+                "<figcaption>",
+                _escape_html_text("; ".join(metadata)),
+                "</figcaption>",
+            ]
+        )
+    parts.extend(["", "</figure>"])
+    return "\n".join(parts)
 
 
 def _markdown_image_path(stored_path: str, output_dir: Path | None) -> str:
@@ -530,6 +638,39 @@ def _age_range(age: dict[str, Any]) -> str:
     if min_ma:
         return f"to {min_ma} Ma"
     return ""
+
+
+def _section(class_name: str, content: str) -> str:
+    """Wrap generated content in a semantic section for catalogue styling.
+
+    :param class_name: CSS class to apply to the section.
+    :param content: Markdown or HTML content to wrap.
+    :return: HTML section containing the content, or an empty string.
+    """
+
+    if not content:
+        return ""
+    return f'<section class="{class_name}">\n\n{content}\n\n</section>'
+
+
+def _callout(title: str, body: str, class_name: str = "") -> str:
+    """Render interpretive text as a styled callout block.
+
+    :param title: Short callout heading.
+    :param body: Markdown body text to place in the callout.
+    :param class_name: Optional additional CSS class.
+    :return: HTML callout block.
+    """
+
+    classes = "specimen-note"
+    if class_name:
+        classes = f"{classes} {class_name}"
+    return (
+        f'<div class="{classes}">\n'
+        f"<strong>{_escape_html_text(title)}</strong>\n\n"
+        f"{body}\n"
+        "</div>"
+    )
 
 
 def _table(
@@ -650,6 +791,26 @@ def _escape_image_text(value: str) -> str:
     """
 
     return value.replace("[", "\\[").replace("]", "\\]")
+
+
+def _escape_html_text(value: Any) -> str:
+    """Escape text for safe use in an HTML text node.
+
+    :param value: Value to normalize and escape.
+    :return: HTML-escaped text.
+    """
+
+    return escape(_display_value(value), quote=False)
+
+
+def _escape_html_attr(value: Any) -> str:
+    """Escape text for safe use in an HTML attribute.
+
+    :param value: Value to normalize and escape.
+    :return: HTML-escaped attribute value.
+    """
+
+    return escape(_display_value(value), quote=True)
 
 
 def _output_stem(record: SpecimenRecord, input_path: Path) -> str:

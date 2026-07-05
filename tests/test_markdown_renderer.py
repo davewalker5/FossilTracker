@@ -119,7 +119,7 @@ def specimen_export() -> dict:
 def test_render_specimen_markdown_contains_publication_sections() -> None:
     markdown = render_specimen_markdown(SpecimenRecord.from_export(specimen_export()))
 
-    assert markdown.startswith('<article class="specimen-record">\n')
+    assert markdown.startswith('<article class="specimen-record" markdown="1">\n')
     assert '<header class="specimen-header">' in markdown
     assert '<p class="specimen-code">FT-0001</p>' in markdown
     assert "<h1>Polished Madagascan Ammonite</h1>" in markdown
@@ -134,7 +134,7 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
         '<span class="badge badge-muted">Locality precision: Region only</span>'
         in markdown
     )
-    assert '<section class="specimen-summary">' in markdown
+    assert '<section class="specimen-summary" markdown="1">' in markdown
     assert "| Common name | Ammonite |" in markdown
     assert "| Acquisition date | 03-Jul-2026 |" in markdown
     assert "## Overview\n\nPolished cross-section.\n\n- Chamber structure visible" in markdown
@@ -143,9 +143,9 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     assert "<figcaption>\nOverall polished face; Type: Overall; Photographer: D. Walker; Licence: Private; Date: 03-Jul-2026\n</figcaption>" in markdown
     assert markdown.index("## Measurements") < markdown.index("## Identification")
     assert markdown.index("## Measurements") > markdown.index("## Primary Image")
-    assert '<section class="specimen-identification">' in markdown
+    assert '<section class="specimen-identification" markdown="1">' in markdown
     assert "| Class | Cephalopoda |" in markdown
-    assert '<div class="specimen-note specimen-note-warning">' in markdown
+    assert '<div class="specimen-note specimen-note-warning" markdown="1">' in markdown
     assert "<strong>Identification note.</strong>" in markdown
     assert "**Likely** ammonoid; genus pending." in markdown
     assert "| Geological age range | 183.7-174.1 Ma |" in markdown
@@ -189,7 +189,8 @@ def test_render_specimen_file_writes_collection_code_markdown(tmp_path: Path) ->
 
     assert output_path == tmp_path / "FT-0001.md"
     assert output_path.read_text(encoding="utf-8").startswith(
-        '<article class="specimen-record">\n\n<header class="specimen-header">\n'
+        '<article class="specimen-record" markdown="1">\n\n'
+        '<header class="specimen-header">\n'
     )
 
 

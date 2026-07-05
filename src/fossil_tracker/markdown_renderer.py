@@ -114,7 +114,7 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
     )
 
     body = "\n\n".join(section for section in sections if section).rstrip()
-    return f'<article class="specimen-record">\n\n{body}\n\n</article>\n'
+    return f'<article class="specimen-record" markdown="1">\n\n{body}\n\n</article>\n'
 
 
 def render_specimen_file(input_path: Path, output_path: Path | None = None) -> Path:
@@ -650,7 +650,7 @@ def _section(class_name: str, content: str) -> str:
 
     if not content:
         return ""
-    return f'<section class="{class_name}">\n\n{content}\n\n</section>'
+    return f'<section class="{class_name}" markdown="1">\n\n{content}\n\n</section>'
 
 
 def _callout(title: str, body: str, class_name: str = "") -> str:
@@ -666,7 +666,7 @@ def _callout(title: str, body: str, class_name: str = "") -> str:
     if class_name:
         classes = f"{classes} {class_name}"
     return (
-        f'<div class="{classes}">\n'
+        f'<div class="{classes}" markdown="1">\n'
         f"<strong>{_escape_html_text(title)}</strong>\n\n"
         f"{body}\n"
         "</div>"

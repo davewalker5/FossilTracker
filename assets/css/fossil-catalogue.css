@@ -18,8 +18,10 @@
 
 .specimen-header {
     margin-bottom: 2rem;
-    padding-bottom: 1rem;
+    padding: 1rem 1.1rem;
+    border: 1px solid #d7d1ca;
     border-bottom: 2px solid #36332e;
+    background: #f7f5f1;
 }
 
 .specimen-code {
@@ -186,6 +188,11 @@
     .specimen-header {
         break-after: avoid;
         page-break-after: avoid;
+        border: 1pt solid #8c877f;
+        border-bottom: 2pt solid #4b4740;
+        background: #f3f1ec;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
     }
 
     .specimen-record h1,

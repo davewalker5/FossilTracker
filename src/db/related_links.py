@@ -50,6 +50,31 @@ def create_related_link(values: dict[str, Any], db_path: Path | None = None) -> 
     )
 
 
+def update_related_link(
+    link_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update a Field Notes link record.
+
+    :param link_id: Related link primary key.
+    :param values: Related link field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(RELATED_LINK_FIELDS, values)
+    payload["specimen_id"] = _optional_int(payload.get("specimen_id"))
+    assignments = ", ".join(
+        [f"{field} = ?" for field in [*RELATED_LINK_FIELDS, "updated_at"]]
+    )
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE specimen_related_links SET {assignments} WHERE id = ?",
+            [payload[field] for field in RELATED_LINK_FIELDS]
+            + [payload["updated_at"], link_id],
+        )
+        connection.commit()
+
+
 def delete_related_link(link_id: int, db_path: Path | None = None) -> None:
     """Delete one Field Notes link record.
 

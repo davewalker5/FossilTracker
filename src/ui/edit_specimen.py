@@ -13,6 +13,7 @@ from ui.common import (
     specimen_choice_index,
     specimen_inputs,
 )
+from ui.specimen_export import export_specimen_json
 
 
 def stay_on_edit_tab() -> None:
@@ -48,8 +49,9 @@ def show_edit_form(db_path: Path) -> None:
         return
 
     values = specimen_inputs("edit", specimen, db_path)
-    left, right = st.columns([1, 1])
+    left, middle, right = st.columns([1, 1, 1])
     save = left.button("Save changes", width="stretch", on_click=stay_on_edit_tab)
+    export = middle.button("Export", width="stretch", on_click=stay_on_edit_tab)
     remove = right.button("Delete specimen", width="stretch", on_click=stay_on_edit_tab)
 
     if save:
@@ -58,6 +60,10 @@ def show_edit_form(db_path: Path) -> None:
             return
         update_specimen(specimen["id"], values, db_path)
         st.success("Specimen updated.")
+
+    if export:
+        output_path = export_specimen_json(specimen["id"], db_path)
+        st.success(f"Specimen exported to {output_path}")
 
     if remove:
         delete_specimen(specimen["id"], db_path)

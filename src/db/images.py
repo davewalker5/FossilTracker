@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from db.core import IMAGE_FIELDS, connect
+from db.core import IMAGE_FIELDS, connect, _optional_int
 
 def list_specimen_images(
     specimen_id: int, db_path: Path | None = None
@@ -23,8 +23,12 @@ def list_specimen_images(
         return list(
             connection.execute(
                 """
-                SELECT *
+                SELECT
+                    specimen_images.*,
+                    image_types.name AS image_type
                 FROM specimen_images
+                LEFT JOIN image_types
+                    ON image_types.id = specimen_images.image_type_id
                 WHERE specimen_id = ?
                 ORDER BY date_taken DESC, created_at DESC, id DESC
                 """,
@@ -43,6 +47,7 @@ def create_specimen_image(values: dict[str, Any], db_path: Path | None = None) -
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in IMAGE_FIELDS}
+    payload["image_type_id"] = _optional_int(payload.get("image_type_id"))
     payload["created_at"] = now
     payload["updated_at"] = now
     fields = [*IMAGE_FIELDS, "created_at", "updated_at"]
@@ -71,6 +76,7 @@ def update_specimen_image(
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in IMAGE_FIELDS}
+    payload["image_type_id"] = _optional_int(payload.get("image_type_id"))
     assignments = ", ".join([f"{field} = ?" for field in [*IMAGE_FIELDS, "updated_at"]])
 
     with connect(db_path) as connection:

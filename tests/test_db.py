@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
 import pytest
 
 from fossil_tracker import db
+from ui.specimen_export import export_specimen_json
 
 
 SCHEMA = """
@@ -94,6 +96,22 @@ CREATE TABLE measurement_types (
     updated_at TEXT NOT NULL
 );
 
+CREATE TABLE image_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE document_types (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
 CREATE TABLE acquisitions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     acquisition_date TEXT,
@@ -114,19 +132,20 @@ CREATE TABLE acquisition_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     acquisition_id INTEGER NOT NULL,
     document_path TEXT NOT NULL,
-    document_type TEXT,
+    document_type_id INTEGER,
     title TEXT,
     notes TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    FOREIGN KEY (acquisition_id) REFERENCES acquisitions (id) ON DELETE CASCADE
+    FOREIGN KEY (acquisition_id) REFERENCES acquisitions (id) ON DELETE CASCADE,
+    FOREIGN KEY (document_type_id) REFERENCES document_types (id)
 );
 
 CREATE TABLE specimen_images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     specimen_id INTEGER NOT NULL,
     image_path TEXT NOT NULL,
-    image_type TEXT,
+    image_type_id INTEGER,
     caption TEXT,
     photographer TEXT,
     licence TEXT,
@@ -134,7 +153,8 @@ CREATE TABLE specimen_images (
     notes TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
+    FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE,
+    FOREIGN KEY (image_type_id) REFERENCES image_types (id)
 );
 
 CREATE TABLE observations (
@@ -153,6 +173,8 @@ CREATE TABLE specimen_related_links (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     specimen_id INTEGER NOT NULL,
     url TEXT NOT NULL,
+    title TEXT,
+    description TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
@@ -244,6 +266,8 @@ def test_seed_only_when_empty(db_path: Path) -> None:
 
 
 def test_create_image_and_observation_records(db_path: Path) -> None:
+    overall_type_id = db.create_image_type({"name": "Overall"}, db_path)
+    closeup_type_id = db.create_image_type({"name": "Close-up"}, db_path)
     specimen_id = db.create_specimen(
         {
             "collection_code": "FT-2000",
@@ -256,7 +280,7 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
         {
             "specimen_id": specimen_id,
             "image_path": "data/images/FT-2000.jpg",
-            "image_type": "Overall",
+            "image_type_id": overall_type_id,
             "caption": "Overall view",
             "photographer": "D. Walker",
             "licence": "Private",
@@ -286,7 +310,7 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
         {
             "specimen_id": specimen_id,
             "image_path": "data/images/FT-2000.jpg",
-            "image_type": "Close-up",
+            "image_type_id": closeup_type_id,
             "caption": "Updated close-up",
             "photographer": "D. Walker",
             "licence": "CC BY 4.0",
@@ -298,6 +322,7 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
     updated_images = db.list_specimen_images(specimen_id, db_path)
     assert updated_images[0]["caption"] == "Updated close-up"
     assert updated_images[0]["image_type"] == "Close-up"
+    assert updated_images[0]["image_type_id"] == closeup_type_id
     assert updated_images[0]["licence"] == "CC BY 4.0"
     assert len(observations) == 1
     assert observations[0]["id"] == observation_id
@@ -322,6 +347,8 @@ def test_create_related_links_and_cascade_delete(db_path: Path) -> None:
         {
             "specimen_id": specimen_id,
             "url": "https://fieldnotes.example/first",
+            "title": "First field note",
+            "description": "Primary contextual resource.",
         },
         db_path,
     )
@@ -337,6 +364,24 @@ def test_create_related_links_and_cascade_delete(db_path: Path) -> None:
     assert len(links) == 2
     assert links[1]["id"] == first_link_id
     assert links[1]["url"] == "https://fieldnotes.example/first"
+    assert links[1]["title"] == "First field note"
+    assert links[1]["description"] == "Primary contextual resource."
+
+    db.update_related_link(
+        first_link_id,
+        {
+            "specimen_id": specimen_id,
+            "url": "https://fieldnotes.example/first-updated",
+            "title": "Updated field note",
+            "description": "Updated contextual resource.",
+        },
+        db_path,
+    )
+    links = db.list_related_links(specimen_id, db_path)
+    updated_link = next(link for link in links if link["id"] == first_link_id)
+    assert updated_link["url"] == "https://fieldnotes.example/first-updated"
+    assert updated_link["title"] == "Updated field note"
+    assert updated_link["description"] == "Updated contextual resource."
 
     db.delete_related_link(first_link_id, db_path)
     links = db.list_related_links(specimen_id, db_path)
@@ -531,6 +576,52 @@ def test_create_update_and_delete_measurement_type(db_path: Path) -> None:
     assert db.list_measurement_types(db_path) == []
 
 
+def test_create_update_and_delete_image_type(db_path: Path) -> None:
+    image_type_id = db.create_image_type(
+        {"name": "Macro", "description": "Detailed macro image."},
+        db_path,
+    )
+
+    image_types = db.list_image_types(db_path)
+    assert [row["id"] for row in image_types] == [image_type_id]
+    assert image_types[0]["name"] == "Macro"
+
+    db.update_image_type(
+        image_type_id,
+        {"name": "Macro detail", "description": "Updated description."},
+        db_path,
+    )
+    updated = db.list_image_types(db_path)
+    assert updated[0]["name"] == "Macro detail"
+    assert updated[0]["description"] == "Updated description."
+
+    db.delete_image_type(image_type_id, db_path)
+    assert db.list_image_types(db_path) == []
+
+
+def test_create_update_and_delete_document_type(db_path: Path) -> None:
+    document_type_id = db.create_document_type(
+        {"name": "Permit", "description": "Export permit."},
+        db_path,
+    )
+
+    document_types = db.list_document_types(db_path)
+    assert [row["id"] for row in document_types] == [document_type_id]
+    assert document_types[0]["name"] == "Permit"
+
+    db.update_document_type(
+        document_type_id,
+        {"name": "Export Permit", "description": "Updated description."},
+        db_path,
+    )
+    updated = db.list_document_types(db_path)
+    assert updated[0]["name"] == "Export Permit"
+    assert updated[0]["description"] == "Updated description."
+
+    db.delete_document_type(document_type_id, db_path)
+    assert db.list_document_types(db_path) == []
+
+
 def test_create_update_and_delete_licence(db_path: Path) -> None:
     licence_id = db.create_licence(
         {
@@ -636,6 +727,8 @@ def test_create_specimen_measurements_and_cascade_delete(db_path: Path) -> None:
 
 
 def test_create_acquisition_and_document_records(db_path: Path) -> None:
+    receipt_type_id = db.create_document_type({"name": "Acquisition Receipt"}, db_path)
+    paper_type_id = db.create_document_type({"name": "Scientific Paper"}, db_path)
     acquisition_id = db.create_acquisition(
         {
             "acquisition_date": "2026-07-03",
@@ -653,7 +746,7 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
         {
             "acquisition_id": acquisition_id,
             "document_path": "data/documents/receipt.pdf",
-            "document_type": "Receipt",
+            "document_type_id": receipt_type_id,
             "title": "Purchase receipt",
         },
         db_path,
@@ -676,8 +769,29 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
     assert specimen["acquisition_id"] == acquisition_id
     assert specimen["public_visible"] == 1
     assert documents[0]["id"] == document_id
+    assert documents[0]["title"] == "Purchase receipt"
+    assert documents[0]["document_type"] == "Acquisition Receipt"
+    assert documents[0]["document_type_id"] == receipt_type_id
     filtered = db.list_specimens(db_path, documented_only=True)
     assert [row["id"] for row in filtered] == [specimen_id]
+
+    db.update_acquisition_document(
+        document_id,
+        {
+            "acquisition_id": acquisition_id,
+            "document_path": "receipt.pdf",
+            "document_type_id": paper_type_id,
+            "title": "Updated purchase receipt",
+            "notes": "Updated document notes.",
+        },
+        db_path,
+    )
+    documents = db.list_acquisition_documents(acquisition_id, db_path)
+    assert documents[0]["document_path"] == "receipt.pdf"
+    assert documents[0]["document_type"] == "Scientific Paper"
+    assert documents[0]["document_type_id"] == paper_type_id
+    assert documents[0]["title"] == "Updated purchase receipt"
+    assert documents[0]["notes"] == "Updated document notes."
 
     db.update_acquisition(
         acquisition_id,
@@ -698,3 +812,130 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
     assert updated["source_name"] == "Updated dealer"
     assert updated["source_type"] == "Auction"
     assert updated["ethical_confidence"] == "Medium"
+
+
+def test_export_specimen_json_writes_tabbed_payload(
+    db_path: Path, tmp_path: Path, monkeypatch
+) -> None:
+    export_folder = tmp_path / "exports"
+    monkeypatch.setenv("FOSSIL_TRACKER_EXPORT", str(export_folder))
+
+    taxon_id = db.create_taxonomy({"genus": "Dactylioceras", "species": "commune"}, db_path)
+    age_id = db.create_geological_age({"period": "Jurassic", "epoch": "Early Jurassic"}, db_path)
+    locality_id = db.create_locality(
+        {"locality_name": "Charmouth", "region": "Dorset", "country": "England"},
+        db_path,
+    )
+    preparation_type_id = db.create_preparation_type({"name": "Prepared"}, db_path)
+    acquisition_id = db.create_acquisition(
+        {"acquisition_date": "2026-07-03", "source_name": "Example dealer"},
+        db_path,
+    )
+    image_type_id = db.create_image_type({"name": "Overall"}, db_path)
+    document_type_id = db.create_document_type({"name": "Acquisition Receipt"}, db_path)
+    measurement_type_id = db.create_measurement_type({"name": "Length", "unit": "mm"}, db_path)
+    specimen_id = db.create_specimen(
+        {
+            "collection_code": "FT-9000",
+            "title": "Export specimen",
+            "taxon_id": taxon_id,
+            "geological_age_id": age_id,
+            "locality_id": locality_id,
+            "acquisition_id": acquisition_id,
+            "preparation_type_id": preparation_type_id,
+        },
+        db_path,
+    )
+    db.create_acquisition_document(
+        {
+            "acquisition_id": acquisition_id,
+            "document_path": "FT-9000_receipt.pdf",
+            "document_type_id": document_type_id,
+            "title": "Receipt",
+            "notes": "Document note.",
+        },
+        db_path,
+    )
+    db.create_specimen_image(
+        {
+            "specimen_id": specimen_id,
+            "image_path": "FT-9000_overall.jpg",
+            "image_type_id": image_type_id,
+            "caption": "Overall view",
+        },
+        db_path,
+    )
+    db.create_observation(
+        {
+            "specimen_id": specimen_id,
+            "observation_type": "General",
+            "notes": "Observation note.",
+        },
+        db_path,
+    )
+    db.create_specimen_measurement(
+        {
+            "specimen_id": specimen_id,
+            "measurement_type_id": measurement_type_id,
+            "value": "42",
+        },
+        db_path,
+    )
+    db.create_related_link(
+        {
+            "specimen_id": specimen_id,
+            "url": "https://example.test/specimen",
+            "title": "Reference",
+            "description": "Related link.",
+        },
+        db_path,
+    )
+
+    output_path = export_specimen_json(specimen_id, db_path)
+    output_path.write_text("stale export")
+    second_output_path = export_specimen_json(specimen_id, db_path)
+    assert second_output_path == output_path
+    payload = json.loads(output_path.read_text())
+
+    assert output_path.parent == export_folder
+    assert output_path.name == "FT-9000.json"
+    assert payload["specimen"]["collection_code"] == "FT-9000"
+    assert "id" not in payload["specimen"]
+    assert "taxon_id" not in payload["specimen"]
+    assert payload["specimen"]["taxonomy"] == "Dactylioceras commune"
+    assert payload["specimen"]["geological_age"] == {
+        "era": None,
+        "period": "Jurassic",
+        "epoch": "Early Jurassic",
+        "stage": None,
+        "min_ma": None,
+        "max_ma": None,
+    }
+    assert payload["specimen"]["locality"] == {
+        "locality_name": "Charmouth",
+        "formation": None,
+        "member": None,
+        "region": "Dorset",
+        "country": "England",
+        "latitude": None,
+        "longitude": None,
+        "locality_precision": None,
+        "locality_notes": None,
+    }
+    assert payload["specimen"]["preparation_type"] == "Prepared"
+    assert payload["specimen"]["acquisition"] == "2026-07-03 - Example dealer"
+    assert payload["taxonomy"]["genus"] == "Dactylioceras"
+    assert "id" not in payload["taxonomy"]
+    assert payload["provenance"]["source_name"] == "Example dealer"
+    assert payload["documents"]["items"][0]["document_path"] == "FT-9000_receipt.pdf"
+    assert "document_type_id" not in payload["documents"]["items"][0]
+    assert payload["documents"]["items"][0]["document_type"] == "Acquisition Receipt"
+    assert payload["images"]["items"][0]["image_path"] == "FT-9000_overall.jpg"
+    assert "image_type_id" not in payload["images"]["items"][0]
+    assert payload["images"]["items"][0]["image_type"] == "Overall"
+    assert payload["notes"]["items"][0]["notes"] == "Observation note."
+    assert "specimen_id" not in payload["notes"]["items"][0]
+    assert "measurement_type_id" not in payload["measurements"]["items"][0]
+    assert payload["measurements"]["items"][0]["measurement_type"] == "Length"
+    assert payload["related links"]["items"][0]["url"] == "https://example.test/specimen"
+    assert "specimen_id" not in payload["related links"]["items"][0]

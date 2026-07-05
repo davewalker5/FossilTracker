@@ -211,8 +211,9 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "kingdom": "Animalia",
             "phylum": "Mollusca",
             "class_name": "Cephalopoda",
+            "subclass": "Ammonoidea",
             "identification_confidence": "Unknown",
-            "identification_notes": "Ammonoidea, identification pending",
+            "identification_notes": "Identification pending",
         },
         db_path,
     )

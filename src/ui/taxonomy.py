@@ -71,23 +71,28 @@ def show_taxonomy_manager(db_path: Path) -> None:
             value=(taxonomy["class_name"] or "") if taxonomy else "",
             key=f"specimen-taxonomy-class-{suffix}",
         )
-        order_name = tax_cols[3].text_input(
+        subclass = tax_cols[3].text_input(
+            "Subclass",
+            value=(taxonomy["subclass"] or "") if taxonomy else "",
+            key=f"specimen-taxonomy-subclass-{suffix}",
+        )
+        lower_tax_cols = st.columns([1, 1, 1, 1])
+        order_name = lower_tax_cols[0].text_input(
             "Order",
             value=(taxonomy["order_name"] or "") if taxonomy else "",
             key=f"specimen-taxonomy-order-{suffix}",
         )
-        family_cols = st.columns([1, 1, 1])
-        family = family_cols[0].text_input(
+        family = lower_tax_cols[1].text_input(
             "Family",
             value=(taxonomy["family"] or "") if taxonomy else "",
             key=f"specimen-taxonomy-family-{suffix}",
         )
-        genus = family_cols[1].text_input(
+        genus = lower_tax_cols[2].text_input(
             "Genus",
             value=(taxonomy["genus"] or "") if taxonomy else "",
             key=f"specimen-taxonomy-genus-{suffix}",
         )
-        species = family_cols[2].text_input(
+        species = lower_tax_cols[3].text_input(
             "Species",
             value=(taxonomy["species"] or "") if taxonomy else "",
             key=f"specimen-taxonomy-species-{suffix}",
@@ -118,6 +123,7 @@ def show_taxonomy_manager(db_path: Path) -> None:
         "kingdom": kingdom,
         "phylum": phylum,
         "class_name": class_name,
+        "subclass": subclass,
         "order_name": order_name,
         "family": family,
         "genus": genus,

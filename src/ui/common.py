@@ -594,6 +594,7 @@ def render_taxonomy_table(records: list[dict]) -> None:
                 "Kingdom": row["kingdom"] or "",
                 "Phylum": row["phylum"] or "",
                 "Class": row["class_name"] or "",
+                "Subclass": row["subclass"] or "",
                 "Order": row["order_name"] or "",
                 "Family": row["family"] or "",
                 "Confidence": row["identification_confidence"] or "",
@@ -918,6 +919,7 @@ def taxonomy_label(taxon: dict | None) -> str:
             taxon["kingdom"],
             taxon["phylum"],
             taxon["class_name"],
+            taxon["subclass"],
             taxon["order_name"],
             taxon["family"],
         ]

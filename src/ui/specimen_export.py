@@ -130,6 +130,7 @@ def taxonomy_label(taxon: dict | None) -> str | None:
             taxon["kingdom"],
             taxon["phylum"],
             taxon["class_name"],
+            taxon["subclass"],
             taxon["order_name"],
             taxon["family"],
         ]

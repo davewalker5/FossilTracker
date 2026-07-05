@@ -44,6 +44,7 @@ def specimen_export() -> dict:
             "kingdom": "Animalia",
             "phylum": "Mollusca",
             "class_name": "Cephalopoda",
+            "subclass": "Ammonoidea",
             "order_name": "Ammonitida",
             "family": "Undetermined",
             "identification_notes": "**Likely** ammonoid; genus pending.",
@@ -153,6 +154,7 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     assert markdown.index("## Measurements") > markdown.index("## Primary Image")
     assert '<section class="specimen-identification" markdown="1">' in markdown
     assert "| Class | Cephalopoda |" in markdown
+    assert "| Subclass | Ammonoidea |" in markdown
     assert '<div class="specimen-note specimen-note-warning" markdown="1">' in markdown
     assert "<strong>Identification note.</strong>" in markdown
     assert "**Likely** ammonoid; genus pending." in markdown

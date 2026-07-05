@@ -10,13 +10,13 @@ import streamlit as st
 from fossil_tracker.db import (
     create_specimen_image,
     get_specimen,
+    list_image_types,
     list_licences,
     list_specimen_images,
     list_specimens,
     update_specimen_image,
 )
 from ui.common import (
-    IMAGE_TYPE_OPTIONS,
     remember_default_specimen,
     remember_selected_specimen,
     render_specimen_images,
@@ -110,10 +110,8 @@ def show_images_and_notes(db_path: Path) -> None:
         image_licence_options(list_licences(db_path)),
         selected_image["licence"] if selected_image else "",
     )
-    image_type_options = option_with_current(
-        IMAGE_TYPE_OPTIONS,
-        selected_image["image_type"] if selected_image else "",
-    )
+    image_type_records = list_image_types(db_path)
+    image_type_options = type_options(image_type_records)
     form_suffix = selected_image["id"] if selected_image else "new"
     stored_date_taken = selected_image["date_taken"] if selected_image else ""
     date_taken_value = parse_image_date(stored_date_taken)
@@ -131,7 +129,11 @@ def show_images_and_notes(db_path: Path) -> None:
         image_type = image_meta[0].selectbox(
             "Image type",
             image_type_options,
-            index=option_index(image_type_options, selected_image["image_type"] if selected_image else ""),
+            index=type_option_index(
+                image_type_options,
+                selected_image["image_type_id"] if selected_image else None,
+            ),
+            format_func=lambda value: type_option_label(value, image_type_records),
             key=f"image-type-{form_suffix}",
         )
         caption = image_meta[1].text_input(
@@ -192,7 +194,7 @@ def show_images_and_notes(db_path: Path) -> None:
                 {
                     "specimen_id": specimen["id"],
                     "image_path": selected_image["image_path"],
-                    "image_type": image_type,
+                    "image_type_id": image_type,
                     "caption": caption,
                     "photographer": photographer,
                     "licence": licence,
@@ -213,7 +215,7 @@ def show_images_and_notes(db_path: Path) -> None:
             {
                 "specimen_id": specimen["id"],
                 "image_path": stored_path,
-                "image_type": image_type,
+                "image_type_id": image_type,
                 "caption": caption,
                 "photographer": photographer,
                 "licence": licence,
@@ -224,3 +226,29 @@ def show_images_and_notes(db_path: Path) -> None:
         )
         st.success("Image added.")
         st.rerun()
+
+
+def type_options(records: list[dict]) -> list[int | None]:
+    """Return optional type ids for image type selectboxes."""
+
+    return [None, *[row["id"] for row in records]]
+
+
+def type_option_index(options: list[int | None], current_value: object) -> int:
+    """Return the selectbox index for an optional reference id."""
+
+    try:
+        return options.index(int(current_value) if current_value else None)
+    except ValueError:
+        return 0
+
+
+def type_option_label(value: int | None, records: list[dict]) -> str:
+    """Render the optional image type placeholder."""
+
+    if value is None:
+        return "Not recorded"
+    for record in records:
+        if record["id"] == value:
+            return record["name"]
+    return "Not recorded"

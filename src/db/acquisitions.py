@@ -106,8 +106,12 @@ def list_acquisition_documents(
         return list(
             connection.execute(
                 """
-                SELECT *
+                SELECT
+                    acquisition_documents.*,
+                    document_types.name AS document_type
                 FROM acquisition_documents
+                LEFT JOIN document_types
+                    ON document_types.id = acquisition_documents.document_type_id
                 WHERE acquisition_id = ?
                 ORDER BY created_at DESC, id DESC
                 """,
@@ -153,6 +157,7 @@ def create_acquisition_document(
 
     payload = _timestamped_payload(ACQUISITION_DOCUMENT_FIELDS, values)
     payload["acquisition_id"] = _optional_int(payload.get("acquisition_id"))
+    payload["document_type_id"] = _optional_int(payload.get("document_type_id"))
     return _insert_record(
         "acquisition_documents",
         [*ACQUISITION_DOCUMENT_FIELDS, "created_at", "updated_at"],
@@ -173,6 +178,7 @@ def update_acquisition_document(
 
     payload = _timestamped_payload(ACQUISITION_DOCUMENT_FIELDS, values)
     payload["acquisition_id"] = _optional_int(payload.get("acquisition_id"))
+    payload["document_type_id"] = _optional_int(payload.get("document_type_id"))
     assignments = ", ".join(
         [f"{field} = ?" for field in [*ACQUISITION_DOCUMENT_FIELDS, "updated_at"]]
     )

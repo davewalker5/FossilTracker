@@ -9,22 +9,30 @@ import sqlite3
 import streamlit as st
 
 from fossil_tracker.db import (
+    create_document_type,
+    create_image_type,
     create_licence,
     create_geological_age,
     create_locality,
     create_measurement_type,
     create_preparation_type,
+    delete_document_type,
     delete_geological_age,
+    delete_image_type,
     delete_licence,
     delete_locality,
     delete_measurement_type,
     delete_preparation_type,
+    list_document_types,
     list_geological_ages,
+    list_image_types,
     list_licences,
     list_localities,
     list_measurement_types,
     list_preparation_types,
+    update_document_type,
     update_geological_age,
+    update_image_type,
     update_licence,
     update_locality,
     update_measurement_type,
@@ -39,6 +47,7 @@ from ui.common import (
     render_locality_table,
     render_measurement_type_table,
     render_preparation_type_table,
+    render_simple_type_table,
 )
 
 
@@ -48,13 +57,23 @@ def show_context_manager(db_path: Path) -> None:
     :param db_path: SQLite database path.
     """
 
-    ages_tab, localities_tab, preparation_tab, licensing_tab, measurement_tab = st.tabs(
+    (
+        ages_tab,
+        localities_tab,
+        preparation_tab,
+        licensing_tab,
+        measurement_tab,
+        image_types_tab,
+        document_types_tab,
+    ) = st.tabs(
         [
             "Geological ages",
             "Localities",
             "Preparation types",
             "Licensing",
             "Measurement types",
+            "Image types",
+            "Document types",
         ]
     )
 
@@ -72,6 +91,12 @@ def show_context_manager(db_path: Path) -> None:
 
     with measurement_tab:
         show_measurement_type_manager(db_path)
+
+    with image_types_tab:
+        show_image_type_manager(db_path)
+
+    with document_types_tab:
+        show_document_type_manager(db_path)
 
 def show_geological_age_manager(db_path: Path) -> None:
     """Render geological age reference data management.
@@ -440,4 +465,121 @@ def show_measurement_type_manager(db_path: Path) -> None:
             st.error("This measurement type is in use and cannot be deleted.")
             return
         st.warning("Measurement type deleted.")
+        st.rerun()
+
+
+def show_image_type_manager(db_path: Path) -> None:
+    """Render image type reference data management."""
+
+    image_types = list_image_types(db_path)
+    st.subheader("Image types")
+    render_simple_type_table(image_types)
+
+    choices = {"New image type": None}
+    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in image_types})
+    selected = st.selectbox("Image type", list(choices), key="image-type-select")
+    selected_id = choices[selected]
+    selected_row = next((row for row in image_types if row["id"] == selected_id), None)
+
+    with st.form(f"image-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
+        name = st.text_input(
+            "Name",
+            value=(selected_row["name"] or "") if selected_row else "",
+            key=f"image-type-name-{selected_id or 'new'}",
+        )
+        description = st.text_area(
+            "Description",
+            value=selected_row["description"] if selected_row and selected_row["description"] else "",
+            key=f"image-type-description-{selected_id or 'new'}",
+        )
+        save_col, delete_col = st.columns([1, 1])
+        save_image_type = save_col.form_submit_button("Save image type")
+        remove_image_type = delete_col.form_submit_button(
+            "Delete image type", disabled=selected_row is None
+        )
+
+    if save_image_type:
+        if not name.strip():
+            st.error("Image type name is required.")
+            return
+        values = {"name": name.strip(), "description": description}
+        try:
+            if selected_row is None:
+                create_image_type(values, db_path)
+                st.success("Image type added.")
+            else:
+                update_image_type(selected_row["id"], values, db_path)
+                st.success("Image type updated.")
+        except sqlite3.IntegrityError:
+            st.error("An image type with that name already exists.")
+            return
+        st.rerun()
+
+    if remove_image_type and selected_row is not None:
+        try:
+            delete_image_type(selected_row["id"], db_path)
+        except sqlite3.IntegrityError:
+            st.error("This image type is in use and cannot be deleted.")
+            return
+        st.warning("Image type deleted.")
+        st.rerun()
+
+
+def show_document_type_manager(db_path: Path) -> None:
+    """Render document type reference data management."""
+
+    document_types = list_document_types(db_path)
+    st.subheader("Document types")
+    render_simple_type_table(document_types)
+
+    choices = {"New document type": None}
+    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in document_types})
+    selected = st.selectbox("Document type", list(choices), key="document-type-select")
+    selected_id = choices[selected]
+    selected_row = next((row for row in document_types if row["id"] == selected_id), None)
+
+    with st.form(
+        f"document-type-form-{selected_id or 'new'}",
+        clear_on_submit=selected_id is None,
+    ):
+        name = st.text_input(
+            "Name",
+            value=(selected_row["name"] or "") if selected_row else "",
+            key=f"document-type-name-{selected_id or 'new'}",
+        )
+        description = st.text_area(
+            "Description",
+            value=selected_row["description"] if selected_row and selected_row["description"] else "",
+            key=f"document-type-description-{selected_id or 'new'}",
+        )
+        save_col, delete_col = st.columns([1, 1])
+        save_document_type = save_col.form_submit_button("Save document type")
+        remove_document_type = delete_col.form_submit_button(
+            "Delete document type", disabled=selected_row is None
+        )
+
+    if save_document_type:
+        if not name.strip():
+            st.error("Document type name is required.")
+            return
+        values = {"name": name.strip(), "description": description}
+        try:
+            if selected_row is None:
+                create_document_type(values, db_path)
+                st.success("Document type added.")
+            else:
+                update_document_type(selected_row["id"], values, db_path)
+                st.success("Document type updated.")
+        except sqlite3.IntegrityError:
+            st.error("A document type with that name already exists.")
+            return
+        st.rerun()
+
+    if remove_document_type and selected_row is not None:
+        try:
+            delete_document_type(selected_row["id"], db_path)
+        except sqlite3.IntegrityError:
+            st.error("This document type is in use and cannot be deleted.")
+            return
+        st.warning("Document type deleted.")
         st.rerun()

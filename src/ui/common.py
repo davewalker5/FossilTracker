@@ -30,7 +30,6 @@ from fossil_tracker.db import (
 )
 
 CONFIDENCE_OPTIONS = ["Unknown", "Low", "Medium", "High"]
-IMAGE_TYPE_OPTIONS = ["", "Overall", "Close-up", "Matrix", "Label", "Comparison", "Other"]
 OBSERVATION_TYPE_OPTIONS = ["", "General", "Morphology", "Condition", "Measurement", "Research note", "Other"]
 SOURCE_TYPE_OPTIONS = ["", "Seller", "Collector", "Gift", "Field collection", "Auction", "Unknown", "Other"]
 
@@ -745,6 +744,30 @@ def render_measurement_type_table(records: list[dict]) -> None:
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Unit": st.column_config.TextColumn("Unit", width="small"),
+            "Description": st.column_config.TextColumn("Description", width="large"),
+        },
+    )
+
+
+def render_simple_type_table(records: list[dict]) -> None:
+    """Render reference type records as a scan-friendly table."""
+
+    if not records:
+        st.info("No records yet.")
+        return
+
+    st.dataframe(
+        [
+            {
+                "Name": row["name"] or "",
+                "Description": row["description"] or "",
+            }
+            for row in records
+        ],
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),
         },
     )

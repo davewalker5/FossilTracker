@@ -12,39 +12,17 @@ from fossil_tracker.db import (
     get_acquisition,
     get_specimen,
     list_acquisition_documents,
+    list_document_types,
     list_specimens,
     update_acquisition_document,
 )
 from ui.common import (
     delete_managed_document_file,
-    option_index,
     remember_default_specimen,
     remember_selected_specimen,
     save_uploaded_document,
     specimen_choice_index,
 )
-
-DOCUMENT_TYPE_OPTIONS = [
-    "",
-    "Acquisition Receipt",
-    "Certificate of Authenticity",
-    "Provenance Document",
-    "Collection Label",
-    "Dealer Information",
-    "Locality Information",
-    "Geological Reference",
-    "Identification Notes",
-    "Scientific Paper",
-    "Book Extract",
-    "Preparation Record",
-    "Export / Permit",
-    "Appraisal / Valuation",
-    "Exhibition Record",
-    "Correspondence",
-    "Field Notes",
-    "Other",
-]
-
 
 def show_acquisition_documents(db_path: Path) -> None:
     """Render acquisition document management for a specimen.
@@ -92,10 +70,8 @@ def show_acquisition_documents(db_path: Path) -> None:
         st.session_state.pop("editing_document_id", None)
 
     form_suffix = selected_document["id"] if selected_document else "new"
-    document_type_options = option_with_current(
-        DOCUMENT_TYPE_OPTIONS,
-        selected_document["document_type"] if selected_document else "",
-    )
+    document_type_records = list_document_types(db_path)
+    document_type_options = type_options(document_type_records)
 
     if selected_document:
         st.markdown("**Edit document details**")
@@ -113,10 +89,11 @@ def show_acquisition_documents(db_path: Path) -> None:
         document_type = document_meta[0].selectbox(
             "Document type",
             document_type_options,
-            index=option_index(
+            index=type_option_index(
                 document_type_options,
-                selected_document["document_type"] if selected_document else "",
+                selected_document["document_type_id"] if selected_document else None,
             ),
+            format_func=lambda value: type_option_label(value, document_type_records),
             key=f"document-type-{form_suffix}",
         )
         title = document_meta[1].text_input(
@@ -148,7 +125,7 @@ def show_acquisition_documents(db_path: Path) -> None:
                 {
                     "acquisition_id": acquisition["id"],
                     "document_path": selected_document["document_path"],
-                    "document_type": document_type,
+                    "document_type_id": document_type,
                     "title": title,
                     "notes": document_notes,
                 },
@@ -166,7 +143,7 @@ def show_acquisition_documents(db_path: Path) -> None:
             {
                 "acquisition_id": acquisition["id"],
                 "document_path": stored_path,
-                "document_type": document_type,
+                "document_type_id": document_type,
                 "title": title,
                 "notes": document_notes,
             },
@@ -218,10 +195,27 @@ def render_document_table(documents: list[dict], db_path: Path) -> None:
             st.rerun()
 
 
-def option_with_current(options: list[str], current_value: object) -> list[str]:
-    """Include a stored document type in the selectbox options when needed."""
+def type_options(records: list[dict]) -> list[int | None]:
+    """Return optional type ids for document type selectboxes."""
 
-    current_text = str(current_value or "")
-    if current_text and current_text not in options:
-        return [*options, current_text]
-    return options
+    return [None, *[row["id"] for row in records]]
+
+
+def type_option_index(options: list[int | None], current_value: object) -> int:
+    """Return the selectbox index for an optional reference id."""
+
+    try:
+        return options.index(int(current_value) if current_value else None)
+    except ValueError:
+        return 0
+
+
+def type_option_label(value: int | None, records: list[dict]) -> str:
+    """Render the optional document type placeholder."""
+
+    if value is None:
+        return "Not recorded"
+    for record in records:
+        if record["id"] == value:
+            return record["name"]
+    return "Not recorded"

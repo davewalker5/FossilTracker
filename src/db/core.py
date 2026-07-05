@@ -26,7 +26,7 @@ SPECIMEN_FIELDS = [
 IMAGE_FIELDS = [
     "specimen_id",
     "image_path",
-    "image_type",
+    "image_type_id",
     "caption",
     "photographer",
     "licence",
@@ -92,6 +92,16 @@ MEASUREMENT_TYPE_FIELDS = [
     "description",
 ]
 
+IMAGE_TYPE_FIELDS = [
+    "name",
+    "description",
+]
+
+DOCUMENT_TYPE_FIELDS = [
+    "name",
+    "description",
+]
+
 ACQUISITION_FIELDS = [
     "acquisition_date",
     "source_name",
@@ -108,7 +118,7 @@ ACQUISITION_FIELDS = [
 ACQUISITION_DOCUMENT_FIELDS = [
     "acquisition_id",
     "document_path",
-    "document_type",
+    "document_type_id",
     "title",
     "notes",
 ]

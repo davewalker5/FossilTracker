@@ -2,7 +2,9 @@
 
 from db.acquisitions import *
 from db.core import *
+from db.document_types import *
 from db.geological_ages import *
+from db.image_types import *
 from db.images import *
 from db.licences import *
 from db.localities import *

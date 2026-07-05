@@ -12,6 +12,7 @@ DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
 DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "fossil_tracker.sqlite3"
 DEFAULT_IMAGE_DIR = DEFAULT_DATA_DIR / "images"
 DEFAULT_DOCUMENT_DIR = DEFAULT_DATA_DIR / "documents"
+DEFAULT_EXPORT_DIR = DEFAULT_DATA_DIR / "exports"
 MIGRATIONS_PATH = PROJECT_ROOT / "migrations"
 
 
@@ -40,6 +41,15 @@ def document_dir() -> Path:
     """
 
     return _configured_path("FOSSIL_TRACKER_DOCUMENTS", DEFAULT_DOCUMENT_DIR)
+
+
+def export_dir() -> Path:
+    """Return the configured export directory.
+
+    :return: Path from FOSSIL_TRACKER_EXPORT or the default export folder.
+    """
+
+    return _configured_path("FOSSIL_TRACKER_EXPORT", DEFAULT_EXPORT_DIR)
 
 
 def _configured_path(environment_variable: str, default_path: Path) -> Path:

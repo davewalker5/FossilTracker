@@ -140,6 +140,10 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     )
     assert '<section class="specimen-summary" markdown="1">' in markdown
     assert "| Common name | Ammonite |" in markdown
+    assert "| Country | Madagascar |" in markdown
+    assert "| Locality precision | Region only |" in markdown
+    assert "| Locality name | Exact locality unknown |" not in markdown
+    assert "| Locality | Exact locality unknown, Mahajanga, Madagascar |" not in markdown
     assert "| Acquisition date | 03-Jul-2026 |" in markdown
     assert "## Overview\n\nPolished cross-section.\n\n- Chamber structure visible" in markdown
     assert '<figure class="specimen-figure specimen-primary-image">' in markdown
@@ -154,6 +158,7 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     assert "**Likely** ammonoid; genus pending." in markdown
     assert "| Geological age range | 183.7-174.1 Ma |" in markdown
     assert "| Formation | Unknown |" in markdown
+    assert "| Region | Mahajanga |" in markdown
     assert "| Diameter | 29 mm |" in markdown
     assert "### Morphology\n\nRibbing is visible around the outer whorl." in markdown
     assert "### Preservation\n\n- Polished face\n- Matrix retained" in markdown

@@ -336,7 +336,7 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
     storage_dir.mkdir(parents=True, exist_ok=True)
     collection_code = safe_filename(str(specimen["collection_code"]))
     original_name = safe_filename(uploaded_file.name)
-    destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
+    destination = unique_path(storage_dir / specimen_upload_filename(collection_code, original_name))
     destination.write_bytes(uploaded_file.getbuffer())
     return destination.name
 
@@ -353,7 +353,7 @@ def save_uploaded_document(uploaded_file, specimen: dict) -> str:
     storage_dir.mkdir(parents=True, exist_ok=True)
     collection_code = safe_filename(str(specimen["collection_code"]))
     original_name = safe_filename(uploaded_file.name)
-    destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
+    destination = unique_path(storage_dir / specimen_upload_filename(collection_code, original_name))
     destination.write_bytes(uploaded_file.getbuffer())
     return destination.name
 
@@ -411,6 +411,18 @@ def safe_filename(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "-", value.strip())
     cleaned = cleaned.strip(".-")
     return cleaned or "image"
+
+
+def specimen_upload_filename(collection_code: str, original_name: str) -> str:
+    """Return an upload filename with the collection code included once."""
+
+    if (
+        original_name == collection_code
+        or original_name.startswith(f"{collection_code}-")
+        or original_name.startswith(f"{collection_code}_")
+    ):
+        return original_name
+    return f"{collection_code}_{original_name}"
 
 
 def unique_path(path: Path) -> Path:

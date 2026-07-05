@@ -50,6 +50,21 @@ def test_save_uploaded_image_uses_configured_image_folder(tmp_path: Path, monkey
     assert path.read_bytes() == b"image-bytes"
 
 
+def test_save_uploaded_image_does_not_duplicate_collection_code(
+    tmp_path: Path, monkeypatch
+) -> None:
+    image_folder = tmp_path / "images"
+    monkeypatch.setenv("FOSSIL_TRACKER_IMAGES", str(image_folder))
+
+    stored_path = save_uploaded_image(
+        UploadedFile("FT-0001-001.jpg", b"image-bytes"),
+        {"collection_code": "FT-0001"},
+    )
+
+    assert stored_path == "FT-0001-001.jpg"
+    assert (image_folder / stored_path).read_bytes() == b"image-bytes"
+
+
 def test_resolve_image_path_uses_configured_image_folder_for_filename(
     tmp_path: Path, monkeypatch
 ) -> None:

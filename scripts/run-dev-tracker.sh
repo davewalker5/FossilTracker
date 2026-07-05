@@ -8,5 +8,6 @@ cd "$PROJECT_ROOT"
 unset FOSSIL_TRACKER_DB
 unset FOSSIL_TRACKER_DOCUMENTS
 unset FOSSIL_TRACKER_IMAGES
+unset FOSSIL_TRACKER_EXPORT
 
 streamlit run src/streamlit_app.py

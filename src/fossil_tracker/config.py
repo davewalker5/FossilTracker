@@ -9,10 +9,10 @@ APP_NAME = "Fossil Tracker"
 PACKAGE_ROOT = Path(__file__).resolve().parent
 PROJECT_ROOT = PACKAGE_ROOT.parents[1]
 DEFAULT_DATA_DIR = PROJECT_ROOT / "data"
-DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "fossil_tracker.sqlite3"
+DEFAULT_DB_PATH = DEFAULT_DATA_DIR / "fossiltracker.db"
 DEFAULT_IMAGE_DIR = DEFAULT_DATA_DIR / "images"
 DEFAULT_DOCUMENT_DIR = DEFAULT_DATA_DIR / "documents"
-DEFAULT_EXPORT_DIR = DEFAULT_DATA_DIR / "exports"
+DEFAULT_EXPORT_DIR = DEFAULT_DATA_DIR / "export"
 MIGRATIONS_PATH = PROJECT_ROOT / "migrations"
 
 

@@ -1,11 +1,13 @@
 FROM python:3.13-slim-bullseye
 
-COPY fossiltracker-1.1.0.0 /opt/fossiltracker
+ARG VERSION
+
+COPY fossiltracker-${VERSION}.0 /opt/fossiltracker
 
 WORKDIR /opt/fossiltracker
 
 RUN apt-get update -y
-RUN pip install --no-cache-dir /opt/fossiltracker/fossil_tracker-1.1.0-py3-none-any.whl
+RUN pip install --no-cache-dir /opt/fossiltracker/fossil_tracker-${VERSION}-py3-none-any.whl
 
 ENV FOSSIL_TRACKER_DB=/var/opt/fossiltracker/fossiltracker.db
 ENV FOSSIL_TRACKER_IMAGES=/var/opt/fossiltracker/images

@@ -255,13 +255,26 @@ def _summary_table(record: SpecimenRecord) -> str:
         ("Common name", record.specimen.get("common_name")),
         ("Preparation type", record.specimen.get("preparation_type")),
         ("Geological age", _geological_age_summary(record)),
-        ("Locality", _locality_summary(record)),
+        *_summary_locality_rows(record),
         ("Acquisition date", record.provenance.get("acquisition_date")),
     ]
     populated = [(label, value) for label, value in rows if _present(value)]
     if not populated:
         return ""
     return _table(["Field", "Value"], populated)
+
+
+def _summary_locality_rows(record: SpecimenRecord) -> list[tuple[str, Any]]:
+    """Render concise locality fields for the opening summary table.
+
+    :param record: Specimen record containing locality data.
+    :return: Locality fields for the opening summary table.
+    """
+
+    return [
+        ("Country", record.locality.get("country")),
+        ("Locality precision", record.locality.get("locality_precision")),
+    ]
 
 
 def _overview(record: SpecimenRecord) -> str:

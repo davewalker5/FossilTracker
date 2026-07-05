@@ -4,17 +4,37 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections import OrderedDict
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 from fossil_tracker.config import PROJECT_ROOT, image_dir
 
+DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATE_TIME_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?$"
+)
+
 
 @dataclass(frozen=True)
 class SpecimenRecord:
-    """A parsed specimen export ready for publication renderers."""
+    """A parsed specimen export ready for publication renderers.
+
+    :param specimen: Core specimen fields from the export payload.
+    :param taxonomy: Taxonomic identification fields.
+    :param geological_age: Geological age fields associated with the specimen.
+    :param locality: Collection locality and formation fields.
+    :param provenance: Acquisition and provenance fields.
+    :param images: Image records attached to the specimen.
+    :param observations: Observation or note records attached to the specimen.
+    :param measurements: Measurement records attached to the specimen.
+    :param related_links: External link records attached to the specimen.
+    :param documents: Document records attached to the specimen.
+    :return: Immutable specimen record used by Markdown renderers.
+    """
 
     specimen: dict[str, Any]
     taxonomy: dict[str, Any]
@@ -29,7 +49,11 @@ class SpecimenRecord:
 
     @classmethod
     def from_export(cls, payload: dict[str, Any]) -> "SpecimenRecord":
-        """Build a renderer-friendly model from a specimen JSON export."""
+        """Build a renderer-friendly model from a specimen JSON export.
+
+        :param payload: Parsed JSON export containing specimen data and related sections.
+        :return: Normalized specimen record for rendering.
+        """
 
         specimen = payload.get("specimen") or {}
         return cls(
@@ -47,13 +71,22 @@ class SpecimenRecord:
 
     @classmethod
     def from_json_path(cls, path: Path) -> "SpecimenRecord":
-        """Read and parse a specimen export from disk."""
+        """Read and parse a specimen export from disk.
+
+        :param path: Path to the JSON export file.
+        :return: Normalized specimen record for rendering.
+        """
 
         return cls.from_export(json.loads(path.read_text(encoding="utf-8")))
 
 
 def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = None) -> str:
-    """Render a specimen record as GitHub/Pandoc-compatible Markdown."""
+    """Render a specimen record as GitHub/Pandoc-compatible Markdown.
+
+    :param record: Normalized specimen record to render.
+    :param output_path: Optional destination path used to make image paths relative.
+    :return: Rendered Markdown document text.
+    """
 
     output_dir = output_path.parent if output_path else None
     sections: list[str] = [_title(record), _summary_table(record)]
@@ -63,9 +96,9 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
         for section in [
             _overview(record),
             _primary_image(record, output_dir),
+            _measurements(record),
             _identification(record),
             _geological_context(record),
-            _measurements(record),
             _observations(record),
             _provenance(record),
             _image_gallery(record, output_dir),
@@ -80,7 +113,12 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
 
 
 def render_specimen_file(input_path: Path, output_path: Path | None = None) -> Path:
-    """Render one specimen JSON export to a Markdown file and return its path."""
+    """Render one specimen JSON export to a Markdown file and return its path.
+
+    :param input_path: Path to the specimen JSON export.
+    :param output_path: Optional path for the generated Markdown file.
+    :return: Path to the written Markdown file.
+    """
 
     record = SpecimenRecord.from_json_path(input_path)
     output = output_path or input_path.with_name(f"{_output_stem(record, input_path)}.md")
@@ -89,6 +127,12 @@ def render_specimen_file(input_path: Path, output_path: Path | None = None) -> P
 
 
 def _items(value: Any) -> list[dict[str, Any]]:
+    """Normalize an export collection to a list of item dictionaries.
+
+    :param value: Export value that may be a list, an ``items`` wrapper, or empty.
+    :return: List containing only dictionary items.
+    """
+
     if isinstance(value, dict):
         items = value.get("items", [])
         return [item for item in items if isinstance(item, dict)]
@@ -98,6 +142,12 @@ def _items(value: Any) -> list[dict[str, Any]]:
 
 
 def _title(record: SpecimenRecord) -> str:
+    """Build the top-level Markdown title for a specimen.
+
+    :param record: Specimen record containing title and collection code fields.
+    :return: Markdown H1 title line.
+    """
+
     code = _clean(record.specimen.get("collection_code"))
     title = _clean(record.specimen.get("title"))
     if code and title:
@@ -106,6 +156,12 @@ def _title(record: SpecimenRecord) -> str:
 
 
 def _summary_table(record: SpecimenRecord) -> str:
+    """Render the short specimen summary table.
+
+    :param record: Specimen record containing summary fields.
+    :return: Markdown table, or an empty string when no summary fields exist.
+    """
+
     rows = [
         ("Common name", record.specimen.get("common_name")),
         ("Preparation type", record.specimen.get("preparation_type")),
@@ -120,6 +176,12 @@ def _summary_table(record: SpecimenRecord) -> str:
 
 
 def _overview(record: SpecimenRecord) -> str:
+    """Render the overview section from the specimen description.
+
+    :param record: Specimen record containing the description field.
+    :return: Markdown overview section, or an empty string when absent.
+    """
+
     description = _markdown_block(record.specimen.get("description"))
     if not description:
         return ""
@@ -127,6 +189,13 @@ def _overview(record: SpecimenRecord) -> str:
 
 
 def _primary_image(record: SpecimenRecord, output_dir: Path | None) -> str:
+    """Render the first image as the primary image section.
+
+    :param record: Specimen record containing image metadata.
+    :param output_dir: Optional output directory used to make image paths relative.
+    :return: Markdown primary image section, or an empty string when unavailable.
+    """
+
     if not record.images:
         return ""
     image = _render_image(record.images[0], output_dir)
@@ -136,6 +205,12 @@ def _primary_image(record: SpecimenRecord, output_dir: Path | None) -> str:
 
 
 def _identification(record: SpecimenRecord) -> str:
+    """Render taxonomic identification fields and notes.
+
+    :param record: Specimen record containing taxonomy data.
+    :return: Markdown identification section, or an empty string when absent.
+    """
+
     rows = []
     for label, key in [
         ("Kingdom", "kingdom"),
@@ -160,6 +235,12 @@ def _identification(record: SpecimenRecord) -> str:
 
 
 def _geological_context(record: SpecimenRecord) -> str:
+    """Render geological age and locality context fields.
+
+    :param record: Specimen record containing geological age and locality data.
+    :return: Markdown geological context section, or an empty string when absent.
+    """
+
     age_range = _age_range(record.geological_age)
     rows = [
         ("Era", record.geological_age.get("era")),
@@ -180,6 +261,12 @@ def _geological_context(record: SpecimenRecord) -> str:
 
 
 def _measurements(record: SpecimenRecord) -> str:
+    """Render specimen measurements as a Markdown table.
+
+    :param record: Specimen record containing measurement rows.
+    :return: Markdown measurements section, or an empty string when absent.
+    """
+
     rows = []
     for measurement in record.measurements:
         label = measurement.get("measurement_type") or measurement.get("measurement_name")
@@ -192,6 +279,12 @@ def _measurements(record: SpecimenRecord) -> str:
 
 
 def _observations(record: SpecimenRecord) -> str:
+    """Render specimen observations grouped by observation type.
+
+    :param record: Specimen record containing observations or notes.
+    :return: Markdown observations section, or an empty string when absent.
+    """
+
     grouped: OrderedDict[str, list[str]] = OrderedDict()
     for observation in record.observations:
         notes = _markdown_block(observation.get("notes"))
@@ -210,6 +303,12 @@ def _observations(record: SpecimenRecord) -> str:
 
 
 def _provenance(record: SpecimenRecord) -> str:
+    """Render provenance fields and narrative notes.
+
+    :param record: Specimen record containing provenance data.
+    :return: Markdown provenance section, or an empty string when absent.
+    """
+
     rows = [
         ("Acquisition date", record.provenance.get("acquisition_date")),
         ("Source", record.provenance.get("source_name")),
@@ -236,6 +335,13 @@ def _provenance(record: SpecimenRecord) -> str:
 
 
 def _image_gallery(record: SpecimenRecord, output_dir: Path | None) -> str:
+    """Render all non-primary images as a gallery section.
+
+    :param record: Specimen record containing image metadata.
+    :param output_dir: Optional output directory used to make image paths relative.
+    :return: Markdown image gallery section, or an empty string when absent.
+    """
+
     remaining = [_render_image(image, output_dir) for image in record.images[1:]]
     remaining = [image for image in remaining if image]
     if not remaining:
@@ -245,6 +351,12 @@ def _image_gallery(record: SpecimenRecord, output_dir: Path | None) -> str:
 
 
 def _related_links(record: SpecimenRecord) -> str:
+    """Render external related links as a Markdown list.
+
+    :param record: Specimen record containing related link entries.
+    :return: Markdown related links section, or an empty string when absent.
+    """
+
     items = []
     for link in record.related_links:
         url = _clean(link.get("url"))
@@ -262,6 +374,12 @@ def _related_links(record: SpecimenRecord) -> str:
 
 
 def _documents(record: SpecimenRecord) -> str:
+    """Render attached document metadata as a Markdown table.
+
+    :param record: Specimen record containing document entries.
+    :return: Markdown documents section, or an empty string when absent.
+    """
+
     rows = []
     for document in record.documents:
         title = document.get("title")
@@ -276,6 +394,12 @@ def _documents(record: SpecimenRecord) -> str:
 
 
 def _record_metadata(record: SpecimenRecord) -> str:
+    """Render collection code and timestamp metadata.
+
+    :param record: Specimen record containing metadata fields.
+    :return: Markdown record metadata section, or an empty string when absent.
+    """
+
     rows = [
         ("Collection code", record.specimen.get("collection_code")),
         ("Created date", record.specimen.get("created_at")),
@@ -288,6 +412,13 @@ def _record_metadata(record: SpecimenRecord) -> str:
 
 
 def _render_image(image: dict[str, Any], output_dir: Path | None) -> str:
+    """Render one image and its metadata as Markdown.
+
+    :param image: Image metadata dictionary from the export.
+    :param output_dir: Optional output directory used to make the image path relative.
+    :return: Markdown image block, or an empty string when no path exists.
+    """
+
     stored_path = _clean(image.get("image_path") or image.get("path"))
     if not stored_path:
         return ""
@@ -309,6 +440,13 @@ def _render_image(image: dict[str, Any], output_dir: Path | None) -> str:
 
 
 def _markdown_image_path(stored_path: str, output_dir: Path | None) -> str:
+    """Resolve an exported image path for use in Markdown.
+
+    :param stored_path: Image path stored in the specimen export.
+    :param output_dir: Optional output directory used to make the path relative.
+    :return: POSIX-style path suitable for a Markdown image link.
+    """
+
     if output_dir is None:
         return stored_path
 
@@ -327,6 +465,12 @@ def _markdown_image_path(stored_path: str, output_dir: Path | None) -> str:
 
 
 def _measurement_value(measurement: dict[str, Any]) -> str:
+    """Combine a measurement value and unit for display.
+
+    :param measurement: Measurement metadata dictionary from the export.
+    :return: Display text containing the value, unit, both, or an empty string.
+    """
+
     value = _clean(measurement.get("value"))
     unit = _clean(measurement.get("measurement_unit") or measurement.get("unit"))
     if value and unit:
@@ -335,6 +479,12 @@ def _measurement_value(measurement: dict[str, Any]) -> str:
 
 
 def _geological_age_summary(record: SpecimenRecord) -> str:
+    """Build a concise geological age summary.
+
+    :param record: Specimen record containing geological age fields.
+    :return: Slash-separated period, epoch, and stage text.
+    """
+
     return " / ".join(
         value
         for value in [
@@ -347,6 +497,12 @@ def _geological_age_summary(record: SpecimenRecord) -> str:
 
 
 def _locality_summary(record: SpecimenRecord) -> str:
+    """Build a concise locality summary.
+
+    :param record: Specimen record containing locality fields.
+    :return: Comma-separated locality, region, and country text.
+    """
+
     return ", ".join(
         value
         for value in [
@@ -359,6 +515,12 @@ def _locality_summary(record: SpecimenRecord) -> str:
 
 
 def _age_range(age: dict[str, Any]) -> str:
+    """Format maximum and minimum age values as a geological range.
+
+    :param age: Geological age dictionary containing optional ``max_ma`` and ``min_ma``.
+    :return: Display text for the geological age range.
+    """
+
     max_ma = _clean(age.get("max_ma"))
     min_ma = _clean(age.get("min_ma"))
     if max_ma and min_ma:
@@ -375,6 +537,14 @@ def _table(
     rows: list[tuple[Any, ...]],
     align_right: set[int] | None = None,
 ) -> str:
+    """Render a Markdown table from headers and rows.
+
+    :param headers: Column labels for the table header.
+    :param rows: Row values to render beneath the header.
+    :param align_right: Optional set of column indexes to right-align.
+    :return: Markdown table text.
+    """
+
     align_right = align_right or set()
     header_row = "| " + " | ".join(_escape_table_cell(header) for header in headers) + " |"
     separator_cells = [("---:" if index in align_right else "---") for index in range(len(headers))]
@@ -387,21 +557,74 @@ def _table(
 
 
 def _label_value(label: str, value: Any) -> str:
-    cleaned = _clean(value)
+    """Format a label and value pair for inline metadata.
+
+    :param label: Label to display before the value.
+    :param value: Value to clean and display.
+    :return: ``"Label: value"`` text, or an empty string when the value is absent.
+    """
+
+    cleaned = _display_value(value)
     return f"{label}: {cleaned}" if cleaned else ""
 
 
 def _markdown_block(value: Any) -> str:
+    """Clean a value for use as a Markdown block.
+
+    :param value: Value that may contain Markdown text.
+    :return: Stripped text, or an empty string when the value is absent.
+    """
+
     return str(value).strip() if _present(value) else ""
 
 
 def _clean(value: Any) -> str:
+    """Convert a value to stripped text.
+
+    :param value: Value to normalize.
+    :return: Stripped string value, or an empty string for ``None``.
+    """
+
     if value is None:
         return ""
     return str(value).strip()
 
 
+def _display_value(value: Any) -> str:
+    """Convert a value to rendered display text.
+
+    :param value: Value to normalize and format for Markdown output.
+    :return: Display string with recognized dates formatted for readers.
+    """
+
+    if isinstance(value, datetime):
+        return value.strftime("%d-%b-%Y %H:%M")
+    if isinstance(value, date):
+        return value.strftime("%d-%b-%Y")
+
+    cleaned = _clean(value)
+    if DATE_ONLY_RE.match(cleaned):
+        try:
+            return date.fromisoformat(cleaned).strftime("%d-%b-%Y")
+        except ValueError:
+            return cleaned
+    if DATE_TIME_RE.match(cleaned):
+        try:
+            return datetime.fromisoformat(cleaned.replace("Z", "+00:00")).strftime(
+                "%d-%b-%Y %H:%M"
+            )
+        except ValueError:
+            return cleaned
+    return cleaned
+
+
 def _present(value: Any) -> bool:
+    """Check whether a value should be rendered.
+
+    :param value: Value to test for renderable content.
+    :return: ``True`` when the value is non-empty, otherwise ``False``.
+    """
+
     if value is None:
         return False
     if isinstance(value, str):
@@ -410,12 +633,31 @@ def _present(value: Any) -> bool:
 
 
 def _escape_table_cell(value: Any) -> str:
-    return " ".join(_clean(value).splitlines()).replace("|", "\\|")
+    """Escape a value for safe use in a Markdown table cell.
+
+    :param value: Cell value to clean and escape.
+    :return: Single-line table cell text with pipe characters escaped.
+    """
+
+    return " ".join(_display_value(value).splitlines()).replace("|", "\\|")
 
 
 def _escape_image_text(value: str) -> str:
+    """Escape text for use in a Markdown image label.
+
+    :param value: Alt text or caption value.
+    :return: Text with Markdown image label delimiters escaped.
+    """
+
     return value.replace("[", "\\[").replace("]", "\\]")
 
 
 def _output_stem(record: SpecimenRecord, input_path: Path) -> str:
+    """Choose the output filename stem for a rendered specimen file.
+
+    :param record: Specimen record containing an optional collection code.
+    :param input_path: Source JSON path used as a fallback stem.
+    :return: Collection code or input filename stem.
+    """
+
     return _clean(record.specimen.get("collection_code")) or input_path.stem

@@ -121,9 +121,12 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
 
     assert "# FT-0001 \u2014 Polished Madagascan Ammonite" in markdown
     assert "| Common name | Ammonite |" in markdown
+    assert "| Acquisition date | 03-Jul-2026 |" in markdown
     assert "## Overview\n\nPolished cross-section.\n\n- Chamber structure visible" in markdown
     assert "![Overall polished face](images/FT-0001-hero.jpg)" in markdown
-    assert "*Overall polished face; Type: Overall; Photographer: D. Walker; Licence: Private; Date: 2026-07-03*" in markdown
+    assert "*Overall polished face; Type: Overall; Photographer: D. Walker; Licence: Private; Date: 03-Jul-2026*" in markdown
+    assert markdown.index("## Measurements") < markdown.index("## Identification")
+    assert markdown.index("## Measurements") > markdown.index("## Primary Image")
     assert "| Class | Cephalopoda |" in markdown
     assert "**Likely** ammonoid; genus pending." in markdown
     assert "| Geological age range | 183.7-174.1 Ma |" in markdown
@@ -135,7 +138,8 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     assert "## Image Gallery\n\n![Suture detail](images/FT-0001-detail.jpg)" in markdown
     assert "- [Field note](https://fieldnotes.example/ammonite) - Contextual note." in markdown
     assert "| Receipt | Receipt | documents/FT-0001-receipt.pdf |" in markdown
-    assert "| Last updated date | 2026-07-04T10:00:00+00:00 |" in markdown
+    assert "| Created date | 01-Jul-2026 10:00 |" in markdown
+    assert "| Last updated date | 04-Jul-2026 10:00 |" in markdown
 
 
 def test_render_specimen_markdown_omits_empty_sections() -> None:

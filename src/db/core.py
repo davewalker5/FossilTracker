@@ -46,6 +46,7 @@ TAXONOMY_FIELDS = [
     "kingdom",
     "phylum",
     "class_name",
+    "subclass",
     "order_name",
     "family",
     "genus",

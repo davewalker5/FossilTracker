@@ -33,6 +33,7 @@ CREATE TABLE taxonomy (
     kingdom TEXT,
     phylum TEXT,
     class_name TEXT,
+    subclass TEXT,
     order_name TEXT,
     family TEXT,
     genus TEXT,
@@ -398,6 +399,7 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
             "kingdom": "Animalia",
             "phylum": "Mollusca",
             "class_name": "Cephalopoda",
+            "subclass": "Ammonoidea",
             "genus": "Dactylioceras",
             "species": "commune",
             "identification_confidence": "Medium",
@@ -448,6 +450,7 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
     assert specimen["locality_id"] == locality_id
     assert specimen["preparation_type_id"] == preparation_type_id
     assert db.get_taxonomy(taxon_id, db_path)["genus"] == "Dactylioceras"
+    assert db.get_taxonomy(taxon_id, db_path)["subclass"] == "Ammonoidea"
     assert db.get_taxonomy_for_specimen(specimen_id, db_path)["id"] == taxon_id
     assert db.get_geological_age(age_id, db_path)["period"] == "Jurassic"
     assert db.get_locality(locality_id, db_path)["country"] == "England"
@@ -458,6 +461,7 @@ def test_create_context_records_and_link_specimen(db_path: Path) -> None:
             "kingdom": "Animalia",
             "phylum": "Mollusca",
             "class_name": "Cephalopoda",
+            "subclass": "Ammonoidea",
             "genus": "Hildoceras",
             "species": "bifrons",
             "identification_confidence": "High",

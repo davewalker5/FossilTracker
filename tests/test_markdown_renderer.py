@@ -119,12 +119,38 @@ def specimen_export() -> dict:
 def test_render_specimen_markdown_contains_publication_sections() -> None:
     markdown = render_specimen_markdown(SpecimenRecord.from_export(specimen_export()))
 
-    assert "# FT-0001 \u2014 Polished Madagascan Ammonite" in markdown
+    assert markdown.startswith('<article class="specimen-record" markdown="1">\n')
+    assert '<header class="specimen-header">' in markdown
+    assert '<p class="specimen-code">FT-0001</p>' in markdown
+    assert "<h1>Polished Madagascan Ammonite</h1>" in markdown
+    assert (
+        '<p class="specimen-subtitle">Jurassic / Early Jurassic / Toarcian - '
+        "Exact locality unknown, Mahajanga, Madagascar - Split and polished</p>"
+    ) in markdown
+    assert '<span class="specimen-badge">Jurassic</span>' in markdown
+    assert '<span class="specimen-badge">Madagascar</span>' in markdown
+    assert (
+        '<span class="specimen-badge specimen-badge-warning">'
+        "Identification provisional</span>"
+    ) in markdown
+    assert (
+        '<span class="specimen-badge specimen-badge-muted">'
+        "Locality precision: Region only</span>"
+        in markdown
+    )
+    assert '<section class="specimen-summary" markdown="1">' in markdown
     assert "| Common name | Ammonite |" in markdown
+    assert "| Acquisition date | 03-Jul-2026 |" in markdown
     assert "## Overview\n\nPolished cross-section.\n\n- Chamber structure visible" in markdown
-    assert "![Overall polished face](images/FT-0001-hero.jpg)" in markdown
-    assert "*Overall polished face; Type: Overall; Photographer: D. Walker; Licence: Private; Date: 2026-07-03*" in markdown
+    assert '<figure class="specimen-figure specimen-primary-image">' in markdown
+    assert '<img src="images/FT-0001-hero.jpg" alt="Overall polished face">' in markdown
+    assert "<figcaption>\nOverall polished face; Type: Overall; Photographer: D. Walker; Licence: Private; Date: 03-Jul-2026\n</figcaption>" in markdown
+    assert markdown.index("## Measurements") < markdown.index("## Identification")
+    assert markdown.index("## Measurements") > markdown.index("## Primary Image")
+    assert '<section class="specimen-identification" markdown="1">' in markdown
     assert "| Class | Cephalopoda |" in markdown
+    assert '<div class="specimen-note specimen-note-warning" markdown="1">' in markdown
+    assert "<strong>Identification note.</strong>" in markdown
     assert "**Likely** ammonoid; genus pending." in markdown
     assert "| Geological age range | 183.7-174.1 Ma |" in markdown
     assert "| Formation | Unknown |" in markdown
@@ -132,10 +158,13 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
     assert "### Morphology\n\nRibbing is visible around the outer whorl." in markdown
     assert "### Preservation\n\n- Polished face\n- Matrix retained" in markdown
     assert "| Ethical confidence | Medium |" in markdown
-    assert "## Image Gallery\n\n![Suture detail](images/FT-0001-detail.jpg)" in markdown
+    assert "## Image Gallery" in markdown
+    assert '<img src="images/FT-0001-detail.jpg" alt="Suture detail">' in markdown
     assert "- [Field note](https://fieldnotes.example/ammonite) - Contextual note." in markdown
     assert "| Receipt | Receipt | documents/FT-0001-receipt.pdf |" in markdown
-    assert "| Last updated date | 2026-07-04T10:00:00+00:00 |" in markdown
+    assert "| Created date | 01-Jul-2026 10:00 |" in markdown
+    assert "| Last updated date | 04-Jul-2026 10:00 |" in markdown
+    assert "derived-measurements" not in markdown
 
 
 def test_render_specimen_markdown_omits_empty_sections() -> None:
@@ -164,7 +193,8 @@ def test_render_specimen_file_writes_collection_code_markdown(tmp_path: Path) ->
 
     assert output_path == tmp_path / "FT-0001.md"
     assert output_path.read_text(encoding="utf-8").startswith(
-        "# FT-0001 \u2014 Polished Madagascan Ammonite\n"
+        '<article class="specimen-record" markdown="1">\n\n'
+        '<header class="specimen-header">\n'
     )
 
 
@@ -182,8 +212,8 @@ def test_render_specimen_file_resolves_configured_image_folder(
 
     output_path = render_specimen_file(input_path)
 
-    assert "![Overall polished face](../images/FT-0001-hero.jpg)" in output_path.read_text(
-        encoding="utf-8"
+    assert '<img src="../images/FT-0001-hero.jpg" alt="Overall polished face">' in (
+        output_path.read_text(encoding="utf-8")
     )
 
 
@@ -198,4 +228,4 @@ def test_render_specimen_markdown_resolves_default_image_folder(monkeypatch) -> 
         PROJECT_ROOT / "data" / "export" / "FT-0001.md",
     )
 
-    assert "![Overall polished face](../images/FT-0001-hero.jpg)" in markdown
+    assert '<img src="../images/FT-0001-hero.jpg" alt="Overall polished face">' in markdown

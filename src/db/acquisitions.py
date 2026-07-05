@@ -161,6 +161,31 @@ def create_acquisition_document(
     )
 
 
+def update_acquisition_document(
+    document_id: int, values: dict[str, Any], db_path: Path | None = None
+) -> None:
+    """Update an acquisition document record.
+
+    :param document_id: Acquisition document primary key.
+    :param values: Acquisition document field values.
+    :param db_path: Optional SQLite database path.
+    """
+
+    payload = _timestamped_payload(ACQUISITION_DOCUMENT_FIELDS, values)
+    payload["acquisition_id"] = _optional_int(payload.get("acquisition_id"))
+    assignments = ", ".join(
+        [f"{field} = ?" for field in [*ACQUISITION_DOCUMENT_FIELDS, "updated_at"]]
+    )
+
+    with connect(db_path) as connection:
+        connection.execute(
+            f"UPDATE acquisition_documents SET {assignments} WHERE id = ?",
+            [payload[field] for field in ACQUISITION_DOCUMENT_FIELDS]
+            + [payload["updated_at"], document_id],
+        )
+        connection.commit()
+
+
 def delete_acquisition_document(
     document_id: int, db_path: Path | None = None
 ) -> None:

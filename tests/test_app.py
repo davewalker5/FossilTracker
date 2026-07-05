@@ -6,7 +6,9 @@ from pathlib import Path
 
 from fossil_tracker.config import PROJECT_ROOT
 from ui.common import (
+    delete_managed_document_file,
     delete_managed_image_file,
+    resolve_document_path,
     resolve_image_path,
     save_uploaded_document,
     save_uploaded_image,
@@ -69,11 +71,59 @@ def test_save_uploaded_document_uses_configured_document_folder(tmp_path: Path, 
         {"collection_code": "FT-0001"},
     )
 
-    path = Path(stored_path)
-    assert path.is_absolute()
-    assert path.parent == document_folder
-    assert path.name == "FT-0001_dealer-receipt.pdf"
+    assert stored_path == "FT-0001_dealer-receipt.pdf"
+    path = document_folder / stored_path
     assert path.read_bytes() == b"document-bytes"
+
+
+def test_resolve_document_path_uses_configured_document_folder(
+    tmp_path: Path, monkeypatch
+) -> None:
+    document_folder = tmp_path / "documents"
+    monkeypatch.setenv("FOSSIL_TRACKER_DOCUMENTS", str(document_folder))
+
+    assert (
+        resolve_document_path("FT-0001_dealer-receipt.pdf")
+        == document_folder / "FT-0001_dealer-receipt.pdf"
+    )
+
+
+def test_delete_managed_document_file_removes_configured_document_file(
+    tmp_path: Path, monkeypatch
+) -> None:
+    document_folder = tmp_path / "documents"
+    monkeypatch.setenv("FOSSIL_TRACKER_DOCUMENTS", str(document_folder))
+    document_folder.mkdir()
+    document_path = document_folder / "FT-0001_receipt.pdf"
+    document_path.write_bytes(b"document-bytes")
+
+    assert delete_managed_document_file("FT-0001_receipt.pdf")
+    assert not document_path.exists()
+
+
+def test_delete_managed_document_file_handles_default_document_folder(monkeypatch) -> None:
+    monkeypatch.delenv("FOSSIL_TRACKER_DOCUMENTS", raising=False)
+    document_path = PROJECT_ROOT / "data" / "documents" / "delete-test.pdf"
+    document_path.parent.mkdir(parents=True, exist_ok=True)
+    document_path.write_bytes(b"document-bytes")
+
+    try:
+        assert delete_managed_document_file("delete-test.pdf")
+        assert not document_path.exists()
+    finally:
+        document_path.unlink(missing_ok=True)
+
+
+def test_delete_managed_document_file_ignores_unmanaged_files(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("FOSSIL_TRACKER_DOCUMENTS", str(tmp_path / "documents"))
+    unmanaged_path = tmp_path / "other" / "external.pdf"
+    unmanaged_path.parent.mkdir()
+    unmanaged_path.write_bytes(b"external-document")
+
+    assert not delete_managed_document_file(str(unmanaged_path))
+    assert unmanaged_path.read_bytes() == b"external-document"
 
 
 def test_delete_managed_image_file_removes_configured_image_file(

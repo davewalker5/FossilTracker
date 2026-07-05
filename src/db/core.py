@@ -116,6 +116,8 @@ ACQUISITION_DOCUMENT_FIELDS = [
 RELATED_LINK_FIELDS = [
     "specimen_id",
     "url",
+    "title",
+    "description",
 ]
 
 SPECIMEN_MEASUREMENT_FIELDS = [

@@ -54,8 +54,12 @@ def render_acquisition_documents(acquisition_id: int, db_path: Path) -> None:
             if document["notes"]:
                 st.write(document["notes"])
             if st.button("Delete document", key=f"delete-document-{document['id']}"):
+                file_deleted = delete_managed_document_file(document["document_path"])
                 delete_acquisition_document(document["id"], db_path)
-                st.warning("Document deleted.")
+                if file_deleted:
+                    st.warning("Document record and uploaded file deleted.")
+                else:
+                    st.warning("Document record deleted.")
                 st.rerun()
 
 
@@ -220,9 +224,12 @@ def render_related_links(
 
     st.markdown("**Field Notes links**")
     for link in links:
+        title = link["title"] or link["url"]
         if allow_delete:
             link_col, action_col = st.columns([5, 1])
-            link_col.markdown(f"[{link['url']}]({link['url']})")
+            link_col.markdown(f"[{title}]({link['url']})")
+            if link["description"]:
+                link_col.write(link["description"])
             if action_col.button("Delete", key=f"delete-related-link-{link['id']}"):
                 st.session_state["pending_related_link_delete"] = link["id"]
                 st.rerun()
@@ -238,7 +245,9 @@ def render_related_links(
                     st.session_state.pop("pending_related_link_delete", None)
                     st.rerun()
         else:
-            st.markdown(f"- [{link['url']}]({link['url']})")
+            st.markdown(f"- [{title}]({link['url']})")
+            if link["description"]:
+                st.write(link["description"])
 
 
 def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | None = None) -> dict:
@@ -334,11 +343,11 @@ def save_uploaded_image(uploaded_file, specimen: dict) -> str:
 
 
 def save_uploaded_document(uploaded_file, specimen: dict) -> str:
-    """Save an uploaded acquisition document and return its stored path.
+    """Save an uploaded acquisition document and return its stored filename.
 
     :param uploaded_file: Streamlit uploaded file object.
     :param specimen: Specimen row used for the filename prefix.
-    :return: Project-relative path when possible, otherwise absolute path.
+    :return: Document filename stored in the configured document folder.
     """
 
     storage_dir = document_dir()
@@ -347,10 +356,50 @@ def save_uploaded_document(uploaded_file, specimen: dict) -> str:
     original_name = safe_filename(uploaded_file.name)
     destination = unique_path(storage_dir / f"{collection_code}_{original_name}")
     destination.write_bytes(uploaded_file.getbuffer())
+    return destination.name
+
+
+def resolve_document_path(stored_path: str) -> Path:
+    """Resolve a stored document path against the configured document folder.
+
+    :param stored_path: Stored filename, relative path, project-relative path, or absolute path.
+    :return: Best matching filesystem path.
+    """
+
+    path = Path(stored_path)
+    if path.is_absolute():
+        return path
+
+    storage_dir = document_dir()
+    configured_path = storage_dir / path
+    project_path = PROJECT_ROOT / path
+    if project_path.exists():
+        try:
+            project_path.relative_to(storage_dir)
+            return project_path
+        except ValueError:
+            pass
+    return configured_path
+
+
+def delete_managed_document_file(stored_path: str) -> bool:
+    """Delete a document file only when it belongs to the configured document folder.
+
+    :param stored_path: Stored document path.
+    :return: True when a file was deleted.
+    """
+
+    path = resolve_document_path(stored_path)
+    storage_dir = document_dir()
     try:
-        return str(destination.relative_to(PROJECT_ROOT))
-    except ValueError:
-        return str(destination)
+        path.resolve().relative_to(storage_dir.resolve())
+    except (FileNotFoundError, ValueError):
+        return False
+
+    if not path.is_file():
+        return False
+    path.unlink()
+    return True
 
 
 def safe_filename(value: str) -> str:

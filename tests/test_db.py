@@ -153,6 +153,8 @@ CREATE TABLE specimen_related_links (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     specimen_id INTEGER NOT NULL,
     url TEXT NOT NULL,
+    title TEXT,
+    description TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
@@ -322,6 +324,8 @@ def test_create_related_links_and_cascade_delete(db_path: Path) -> None:
         {
             "specimen_id": specimen_id,
             "url": "https://fieldnotes.example/first",
+            "title": "First field note",
+            "description": "Primary contextual resource.",
         },
         db_path,
     )
@@ -337,6 +341,24 @@ def test_create_related_links_and_cascade_delete(db_path: Path) -> None:
     assert len(links) == 2
     assert links[1]["id"] == first_link_id
     assert links[1]["url"] == "https://fieldnotes.example/first"
+    assert links[1]["title"] == "First field note"
+    assert links[1]["description"] == "Primary contextual resource."
+
+    db.update_related_link(
+        first_link_id,
+        {
+            "specimen_id": specimen_id,
+            "url": "https://fieldnotes.example/first-updated",
+            "title": "Updated field note",
+            "description": "Updated contextual resource.",
+        },
+        db_path,
+    )
+    links = db.list_related_links(specimen_id, db_path)
+    updated_link = next(link for link in links if link["id"] == first_link_id)
+    assert updated_link["url"] == "https://fieldnotes.example/first-updated"
+    assert updated_link["title"] == "Updated field note"
+    assert updated_link["description"] == "Updated contextual resource."
 
     db.delete_related_link(first_link_id, db_path)
     links = db.list_related_links(specimen_id, db_path)
@@ -676,8 +698,26 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
     assert specimen["acquisition_id"] == acquisition_id
     assert specimen["public_visible"] == 1
     assert documents[0]["id"] == document_id
+    assert documents[0]["title"] == "Purchase receipt"
     filtered = db.list_specimens(db_path, documented_only=True)
     assert [row["id"] for row in filtered] == [specimen_id]
+
+    db.update_acquisition_document(
+        document_id,
+        {
+            "acquisition_id": acquisition_id,
+            "document_path": "receipt.pdf",
+            "document_type": "Acquisition Receipt",
+            "title": "Updated purchase receipt",
+            "notes": "Updated document notes.",
+        },
+        db_path,
+    )
+    documents = db.list_acquisition_documents(acquisition_id, db_path)
+    assert documents[0]["document_path"] == "receipt.pdf"
+    assert documents[0]["document_type"] == "Acquisition Receipt"
+    assert documents[0]["title"] == "Updated purchase receipt"
+    assert documents[0]["notes"] == "Updated document notes."
 
     db.update_acquisition(
         acquisition_id,

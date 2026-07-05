@@ -23,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
         "--db",
         type=Path,
         default=database_path(),
-        help="SQLite database path. Defaults to data/fossil_tracker.sqlite3.",
+        help="SQLite database path. Defaults to data/fossiltracker.db",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

@@ -196,13 +196,15 @@ def _specimen_badges(record: SpecimenRecord) -> str:
     locality_precision = _clean(record.locality.get("locality_precision"))
 
     if period:
-        badges.append(("badge", period))
+        badges.append(("specimen-badge", period))
     if country:
-        badges.append(("badge", country))
+        badges.append(("specimen-badge", country))
     if _identification_is_provisional(record):
-        badges.append(("badge badge-warning", "Identification provisional"))
+        badges.append(("specimen-badge specimen-badge-warning", "Identification provisional"))
     if locality_precision:
-        badges.append(("badge badge-muted", f"Locality precision: {locality_precision}"))
+        badges.append(
+            ("specimen-badge specimen-badge-muted", f"Locality precision: {locality_precision}")
+        )
 
     if not badges:
         return ""

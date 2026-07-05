@@ -127,11 +127,15 @@ def test_render_specimen_markdown_contains_publication_sections() -> None:
         '<p class="specimen-subtitle">Jurassic / Early Jurassic / Toarcian - '
         "Exact locality unknown, Mahajanga, Madagascar - Split and polished</p>"
     ) in markdown
-    assert '<span class="badge">Jurassic</span>' in markdown
-    assert '<span class="badge">Madagascar</span>' in markdown
-    assert '<span class="badge badge-warning">Identification provisional</span>' in markdown
+    assert '<span class="specimen-badge">Jurassic</span>' in markdown
+    assert '<span class="specimen-badge">Madagascar</span>' in markdown
     assert (
-        '<span class="badge badge-muted">Locality precision: Region only</span>'
+        '<span class="specimen-badge specimen-badge-warning">'
+        "Identification provisional</span>"
+    ) in markdown
+    assert (
+        '<span class="specimen-badge specimen-badge-muted">'
+        "Locality precision: Region only</span>"
         in markdown
     )
     assert '<section class="specimen-summary" markdown="1">' in markdown

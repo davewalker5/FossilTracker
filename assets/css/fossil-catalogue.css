@@ -54,25 +54,29 @@
     margin-top: 1rem;
 }
 
-.badge {
+.specimen-badges .specimen-badge {
     display: inline-flex;
     align-items: center;
-    min-height: 1.65rem;
-    padding: 0.16rem 0.6rem;
-    border: 1px solid #9c9388;
-    border-radius: 999px;
+    min-height: 1.5rem;
+    padding: 0.18rem 0.55rem;
+    border: 1px solid #b8aea3;
+    border-radius: 0.35rem;
+    outline: 0;
+    box-shadow: none;
+    background: #fff;
     color: #38342f;
     font-size: 0.78rem;
     line-height: 1.2;
+    white-space: nowrap;
 }
 
-.badge-warning {
+.specimen-badges .specimen-badge-warning {
     border-color: #8b6516;
     color: #6f4f0f;
     background: #fbf5e7;
 }
 
-.badge-muted {
+.specimen-badges .specimen-badge-muted {
     border-color: #c7c0b8;
     color: #686159;
     background: #f7f6f4;
@@ -214,10 +218,23 @@
         object-fit: contain;
     }
 
-    .badge {
-        border-color: #777;
+    .specimen-badges .specimen-badge {
+        border: 0;
+        border-radius: 3pt;
+        outline: 0;
+        box-shadow: none;
         color: #000;
-        background: transparent;
+        background: #ddd6ca;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    .specimen-badges .specimen-badge-warning {
+        background: #e7d4a8;
+    }
+
+    .specimen-badges .specimen-badge-muted {
+        background: #e5ded4;
     }
 
     .specimen-record a {

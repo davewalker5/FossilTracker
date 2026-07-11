@@ -730,6 +730,37 @@ def test_create_specimen_measurements_and_cascade_delete(db_path: Path) -> None:
     assert db.list_specimen_measurements(specimen_id, db_path) == []
 
 
+def test_save_specimen_measurements_inserts_and_updates_atomically(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {"collection_code": "FT-3501", "title": "Ammonite"}, db_path
+    )
+    diameter_id = db.create_measurement_type(
+        {"name": "Shell Diameter (D)", "unit": "mm"}, db_path
+    )
+    ratio_id = db.create_measurement_type(
+        {"name": "Umbilical Ratio (U/D)", "unit": "None"}, db_path
+    )
+
+    db.save_specimen_measurements(
+        specimen_id, {diameter_id: "100", ratio_id: "0.3"}, db_path
+    )
+    db.save_specimen_measurements(
+        specimen_id, {diameter_id: "120", ratio_id: "0.25"}, db_path
+    )
+
+    measurements = {
+        row["measurement_name"]: row["value"]
+        for row in db.list_specimen_measurements(specimen_id, db_path)
+    }
+    assert measurements == {
+        "Shell Diameter (D)": "120",
+        "Umbilical Ratio (U/D)": "0.25",
+    }
+
+    db.save_specimen_measurements(specimen_id, {ratio_id: None}, db_path)
+    measurements = db.list_specimen_measurements(specimen_id, db_path)
+    assert [row["measurement_name"] for row in measurements] == ["Shell Diameter (D)"]
+
 def test_create_acquisition_and_document_records(db_path: Path) -> None:
     receipt_type_id = db.create_document_type({"name": "Acquisition Receipt"}, db_path)
     paper_type_id = db.create_document_type({"name": "Scientific Paper"}, db_path)

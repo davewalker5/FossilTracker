@@ -81,17 +81,39 @@ def delete_specimen_measurement(
 
 def save_specimen_measurements(
     specimen_id: int,
-    measurements: dict[int, str],
+    measurements: dict[int, str | None],
     db_path: Path | None = None,
 ) -> None:
-    """Atomically insert or update several measurements for one specimen."""
+    """Atomically insert, update, or clear measurements for one specimen.
 
+    :param specimen_id: Specimen primary key.
+    :param measurements: Values keyed by measurement type id; ``None`` clears a value.
+    :param db_path: Optional SQLite database path.
+    :return: None.
+    """
+
+    # Use one timestamp for every value saved in this logical operation.
     now = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
         (specimen_id, measurement_type_id, value, now, now)
         for measurement_type_id, value in measurements.items()
+        if value is not None
+    ]
+    cleared_type_ids = [
+        measurement_type_id
+        for measurement_type_id, value in measurements.items()
+        if value is None
     ]
     with connect(db_path) as connection:
+        # Remove optional values that the user has explicitly cleared.
+        connection.executemany(
+            """
+            DELETE FROM specimen_measurements
+            WHERE specimen_id = ? AND measurement_type_id = ?
+            """,
+            [(specimen_id, measurement_type_id) for measurement_type_id in cleared_type_ids],
+        )
+        # Upsert the remaining values so repeat saves update the same records.
         connection.executemany(
             """
             INSERT INTO specimen_measurements

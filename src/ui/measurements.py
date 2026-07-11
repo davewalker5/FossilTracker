@@ -176,6 +176,9 @@ def _show_standard_measurements(specimen_id: int, db_path: Path) -> None:
             },
             db_path,
         )
+    except ValueError:
+        st.error("Measurement value must be a number.")
+        return
     except sqlite3.IntegrityError:
         st.error("This specimen already has that measurement type.")
         return

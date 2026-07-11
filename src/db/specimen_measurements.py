@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,26 @@ from db.core import (
     _optional_int,
     _timestamped_payload,
 )
+
+
+def _rounded_measurement_value(value: Any) -> str:
+    """Return a numeric measurement rounded to at most three decimal places."""
+
+    try:
+        number = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError("measurement value must be numeric") from exc
+    if not number.is_finite():
+        raise ValueError("measurement value must be finite")
+
+    try:
+        rounded = number.quantize(Decimal("0.001"), rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError("measurement value is outside the supported range") from exc
+    if rounded == 0:
+        return "0"
+    return format(rounded, "f").rstrip("0").rstrip(".")
+
 
 def list_specimen_measurements(
     specimen_id: int, db_path: Path | None = None
@@ -57,6 +78,7 @@ def create_specimen_measurement(
     payload = _timestamped_payload(SPECIMEN_MEASUREMENT_FIELDS, values)
     payload["specimen_id"] = _optional_int(payload.get("specimen_id"))
     payload["measurement_type_id"] = _optional_int(payload.get("measurement_type_id"))
+    payload["value"] = _rounded_measurement_value(payload.get("value"))
     return _insert_record(
         "specimen_measurements",
         [*SPECIMEN_MEASUREMENT_FIELDS, "created_at", "updated_at"],
@@ -95,7 +117,13 @@ def save_specimen_measurements(
     # Use one timestamp for every value saved in this logical operation.
     now = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
-        (specimen_id, measurement_type_id, value, now, now)
+        (
+            specimen_id,
+            measurement_type_id,
+            _rounded_measurement_value(value),
+            now,
+            now,
+        )
         for measurement_type_id, value in measurements.items()
         if value is not None
     ]

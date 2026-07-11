@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -75,4 +76,53 @@ def delete_specimen_measurement(
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimen_measurements WHERE id = ?", (measurement_id,))
+        connection.commit()
+
+
+def save_specimen_measurements(
+    specimen_id: int,
+    measurements: dict[int, str | None],
+    db_path: Path | None = None,
+) -> None:
+    """Atomically insert, update, or clear measurements for one specimen.
+
+    :param specimen_id: Specimen primary key.
+    :param measurements: Values keyed by measurement type id; ``None`` clears a value.
+    :param db_path: Optional SQLite database path.
+    :return: None.
+    """
+
+    # Use one timestamp for every value saved in this logical operation.
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    rows = [
+        (specimen_id, measurement_type_id, value, now, now)
+        for measurement_type_id, value in measurements.items()
+        if value is not None
+    ]
+    cleared_type_ids = [
+        measurement_type_id
+        for measurement_type_id, value in measurements.items()
+        if value is None
+    ]
+    with connect(db_path) as connection:
+        # Remove optional values that the user has explicitly cleared.
+        connection.executemany(
+            """
+            DELETE FROM specimen_measurements
+            WHERE specimen_id = ? AND measurement_type_id = ?
+            """,
+            [(specimen_id, measurement_type_id) for measurement_type_id in cleared_type_ids],
+        )
+        # Upsert the remaining values so repeat saves update the same records.
+        connection.executemany(
+            """
+            INSERT INTO specimen_measurements
+                (specimen_id, measurement_type_id, value, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(specimen_id, measurement_type_id) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            rows,
+        )
         connection.commit()

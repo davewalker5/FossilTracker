@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -75,4 +76,31 @@ def delete_specimen_measurement(
 
     with connect(db_path) as connection:
         connection.execute("DELETE FROM specimen_measurements WHERE id = ?", (measurement_id,))
+        connection.commit()
+
+
+def save_specimen_measurements(
+    specimen_id: int,
+    measurements: dict[int, str],
+    db_path: Path | None = None,
+) -> None:
+    """Atomically insert or update several measurements for one specimen."""
+
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    rows = [
+        (specimen_id, measurement_type_id, value, now, now)
+        for measurement_type_id, value in measurements.items()
+    ]
+    with connect(db_path) as connection:
+        connection.executemany(
+            """
+            INSERT INTO specimen_measurements
+                (specimen_id, measurement_type_id, value, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(specimen_id, measurement_type_id) DO UPDATE SET
+                value = excluded.value,
+                updated_at = excluded.updated_at
+            """,
+            rows,
+        )
         connection.commit()

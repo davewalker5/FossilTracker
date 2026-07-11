@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fossil-tracker"
-version = "1.2.0"
+version = "1.3.0"
 description = "Fossil Collection Tracker"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -28,6 +28,9 @@ py-modules = ["streamlit_app"]
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["db*", "fossil_tracker*", "ui*"]
+
+[tool.setuptools.package-data]
+fossil_tracker = ["assets/images/*.png"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

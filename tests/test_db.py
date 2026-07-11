@@ -730,6 +730,46 @@ def test_create_specimen_measurements_and_cascade_delete(db_path: Path) -> None:
     assert db.list_specimen_measurements(specimen_id, db_path) == []
 
 
+def test_specimen_measurements_are_rounded_to_three_decimal_places(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {"collection_code": "FT-3502", "title": "Precisely measured specimen"}, db_path
+    )
+    length_id = db.create_measurement_type(
+        {"name": "Precise Length", "unit": "mm"}, db_path
+    )
+
+    db.create_specimen_measurement(
+        {
+            "specimen_id": specimen_id,
+            "measurement_type_id": length_id,
+            "value": "1.2345",
+        },
+        db_path,
+    )
+    assert db.list_specimen_measurements(specimen_id, db_path)[0]["value"] == "1.235"
+
+    db.save_specimen_measurements(specimen_id, {length_id: "2.0004"}, db_path)
+    assert db.list_specimen_measurements(specimen_id, db_path)[0]["value"] == "2"
+
+
+def test_specimen_measurements_must_be_finite_numbers(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {"collection_code": "FT-3503", "title": "Invalid measurement specimen"},
+        db_path,
+    )
+    length_id = db.create_measurement_type({"name": "Width", "unit": "mm"}, db_path)
+
+    with pytest.raises(ValueError, match="numeric"):
+        db.create_specimen_measurement(
+            {
+                "specimen_id": specimen_id,
+                "measurement_type_id": length_id,
+                "value": "not a number",
+            },
+            db_path,
+        )
+
+
 def test_save_specimen_measurements_inserts_and_updates_atomically(db_path: Path) -> None:
     specimen_id = db.create_specimen(
         {"collection_code": "FT-3501", "title": "Ammonite"}, db_path

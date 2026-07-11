@@ -111,6 +111,7 @@ def show_taxonomy_manager(db_path: Path) -> None:
             value=taxonomy["identification_notes"]
             if taxonomy and taxonomy["identification_notes"]
             else "",
+            height=200,
             key=f"specimen-taxonomy-notes-{suffix}",
         )
         save_col, delete_col = st.columns([1, 1])

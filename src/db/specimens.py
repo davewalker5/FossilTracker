@@ -249,18 +249,16 @@ def seed_specimens(db_path: Path | None = None) -> int:
             "acquisition_id": ammonite_acquisition_id,
             "description": "Polished cross-section showing chamber structure.",
             "preparation_type_id": split_polished_id,
-            "public_visible": True,
         },
         db_path=db_path,
     )
     return 1
 
 def _coerce_specimen_foreign_keys(payload: dict[str, Any]) -> None:
-    """Normalize specimen foreign-key and boolean values in place.
+    """Normalize specimen foreign-key values in place.
 
     :param payload: Specimen insert/update payload.
     """
 
     for field in ["taxon_id", "geological_age_id", "locality_id", "preparation_type_id", "acquisition_id"]:
         payload[field] = _optional_int(payload.get(field))
-    payload["public_visible"] = bool(payload.get("public_visible"))

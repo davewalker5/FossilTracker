@@ -138,7 +138,6 @@ def render_specimen_observations(
             heading = f"{heading} - {observation['observation_date']}"
         with st.expander(heading, expanded=allow_delete):
             st.markdown(observation["notes"])
-            st.caption("Public" if observation["public_visible"] else "Private")
             if allow_delete and st.button(
                 "Delete observation", key=f"delete-observation-{observation['id']}"
             ):
@@ -314,12 +313,6 @@ def specimen_inputs(prefix: str, specimen: dict | None = None, db_path: Path | N
     )
 
     values["acquisition_id"] = data.get("acquisition_id", "")
-    values["public_visible"] = st.checkbox(
-        "Public record",
-        value=bool(data.get("public_visible", False)),
-        key=f"{prefix}-public-visible",
-    )
-
     values["description"] = st.text_area("Description", value=data.get("description", ""), key=f"{prefix}-description")
     return {field: values.get(field, "") for field in SPECIMEN_FIELDS}
 

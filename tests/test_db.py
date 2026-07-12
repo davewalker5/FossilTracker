@@ -20,7 +20,6 @@ CREATE TABLE specimens (
     geological_age_id INTEGER,
     locality_id INTEGER,
     acquisition_id INTEGER,
-    public_visible INTEGER NOT NULL DEFAULT 0,
     description TEXT,
     preparation_type_id INTEGER,
     storage_location TEXT,
@@ -164,7 +163,6 @@ CREATE TABLE observations (
     observation_date TEXT,
     observation_type TEXT,
     notes TEXT NOT NULL,
-    public_visible INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (specimen_id) REFERENCES specimens (id) ON DELETE CASCADE
@@ -296,7 +294,6 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
             "observation_date": "2026-07-03",
             "observation_type": "Morphology",
             "notes": "**Markdown** observation note.",
-            "public_visible": True,
         },
         db_path,
     )
@@ -328,7 +325,6 @@ def test_create_image_and_observation_records(db_path: Path) -> None:
     assert len(observations) == 1
     assert observations[0]["id"] == observation_id
     assert observations[0]["notes"] == "**Markdown** observation note."
-    assert observations[0]["public_visible"] == 1
 
     db.delete_specimen_image(image_id, db_path)
     db.delete_observation(observation_id, db_path)
@@ -831,7 +827,6 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
             "collection_code": "FT-4000",
             "title": "Provenance specimen",
             "acquisition_id": acquisition_id,
-            "public_visible": True,
         },
         db_path,
     )
@@ -842,7 +837,6 @@ def test_create_acquisition_and_document_records(db_path: Path) -> None:
     assert acquisition["source_name"] == "Example dealer"
     assert db.has_acquisition_documents(acquisition_id, db_path)
     assert specimen["acquisition_id"] == acquisition_id
-    assert specimen["public_visible"] == 1
     assert documents[0]["id"] == document_id
     assert documents[0]["title"] == "Purchase receipt"
     assert documents[0]["document_type"] == "Acquisition Receipt"

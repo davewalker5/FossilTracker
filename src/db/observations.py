@@ -43,7 +43,6 @@ def create_observation(values: dict[str, Any], db_path: Path | None = None) -> i
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
-    payload["public_visible"] = bool(payload.get("public_visible"))
     payload["created_at"] = now
     payload["updated_at"] = now
     fields = [*OBSERVATION_FIELDS, "created_at", "updated_at"]
@@ -72,7 +71,6 @@ def update_observation(
 
     now = datetime.now(UTC).isoformat(timespec="seconds")
     payload = {field: values.get(field) for field in OBSERVATION_FIELDS}
-    payload["public_visible"] = bool(payload.get("public_visible"))
     assignments = ", ".join(
         [f"{field} = ?" for field in [*OBSERVATION_FIELDS, "updated_at"]]
     )

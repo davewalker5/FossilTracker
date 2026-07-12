@@ -19,7 +19,6 @@ ADD_SPECIMEN_WIDGET_KEYS = [
     "new-locality-id",
     "new-storage",
     "new-preparation-type-id",
-    "new-public-visible",
     "new-description",
 ]
 

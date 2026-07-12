@@ -61,7 +61,6 @@ def show_observation_notes(db_path: Path) -> None:
         observation_type = observation_meta[1].selectbox(
             "Observation type", OBSERVATION_TYPE_OPTIONS
         )
-        public_visible = st.checkbox("Public")
         notes = st.text_area("Notes", height=180)
         add_observation = st.form_submit_button("Add observation")
 
@@ -75,7 +74,6 @@ def show_observation_notes(db_path: Path) -> None:
                 "observation_date": observation_date_text(observation_date),
                 "observation_type": observation_type,
                 "notes": notes,
-                "public_visible": public_visible,
             },
             db_path,
         )

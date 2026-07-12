@@ -17,7 +17,6 @@ SPECIMEN_FIELDS = [
     "geological_age_id",
     "locality_id",
     "acquisition_id",
-    "public_visible",
     "description",
     "preparation_type_id",
     "storage_location",
@@ -39,7 +38,6 @@ OBSERVATION_FIELDS = [
     "observation_date",
     "observation_type",
     "notes",
-    "public_visible",
 ]
 
 TAXONOMY_FIELDS = [

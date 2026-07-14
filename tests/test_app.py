@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fossil_tracker.config import PROJECT_ROOT
+from ui.documents import document_notes_preview
 from ui.common import (
     delete_managed_document_file,
     delete_managed_image_file,
@@ -33,6 +34,12 @@ class UploadedFile:
 
     def getbuffer(self) -> bytes:
         return self._content
+
+
+def test_document_notes_preview_truncates_long_notes() -> None:
+    assert document_notes_preview("Short note") == "Short note"
+    assert document_notes_preview("x" * 100) == "x" * 100
+    assert document_notes_preview("x" * 101) == f"{'x' * 100}..."
 
 
 def test_save_uploaded_image_uses_configured_image_folder(tmp_path: Path, monkeypatch) -> None:

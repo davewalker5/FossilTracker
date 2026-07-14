@@ -24,6 +24,14 @@ from ui.common import (
     specimen_choice_index,
 )
 
+
+def document_notes_preview(value: object, limit: int = 50) -> str:
+    """Return a shortened document-notes preview for table display."""
+
+    text = str(value or "")
+    return text if len(text) <= limit else f"{text[:limit]}..."
+
+
 def show_acquisition_documents(db_path: Path) -> None:
     """Render acquisition document management for a specimen.
 
@@ -59,15 +67,21 @@ def show_acquisition_documents(db_path: Path) -> None:
 
     st.subheader("Documents")
     documents = list_acquisition_documents(acquisition["id"], db_path)
-    render_document_table(documents, db_path)
-
     editing_document_id = st.session_state.get("editing_document_id")
+    if not any(document["id"] == editing_document_id for document in documents):
+        st.session_state.pop("editing_document_id", None)
+        editing_document_id = None
+    new_editing_document_id = render_document_table(
+        documents, db_path, acquisition["id"], editing_document_id
+    )
+    if new_editing_document_id != editing_document_id:
+        st.session_state["editing_document_id"] = new_editing_document_id
+        st.session_state.pop("pending_document_delete", None)
+        st.rerun()
     selected_document = next(
         (document for document in documents if document["id"] == editing_document_id),
         None,
     )
-    if editing_document_id and selected_document is None:
-        st.session_state.pop("editing_document_id", None)
 
     form_suffix = selected_document["id"] if selected_document else "new"
     document_type_records = list_document_types(db_path)
@@ -106,15 +120,11 @@ def show_acquisition_documents(db_path: Path) -> None:
             value=(selected_document["notes"] or "") if selected_document else "",
             key=f"document-notes-{form_suffix}",
         )
-        action_col, cancel_col = st.columns([1, 1])
-        save_document = action_col.form_submit_button(
-            "Save document details" if selected_document else "Add document"
-        )
-        cancel_edit = cancel_col.form_submit_button(
-            "Cancel editing", disabled=selected_document is None
-        )
+        save_col, clear_col = st.columns(2)
+        save_document = save_col.form_submit_button("Save", width="stretch")
+        clear_document = clear_col.form_submit_button("Clear", width="stretch")
 
-    if cancel_edit:
+    if clear_document:
         st.session_state.pop("editing_document_id", None)
         st.rerun()
 
@@ -153,46 +163,117 @@ def show_acquisition_documents(db_path: Path) -> None:
         st.rerun()
 
 
-def render_document_table(documents: list[dict], db_path: Path) -> None:
-    """Render acquisition documents as an editable table-like list."""
+def render_document_table(
+    documents: list[dict],
+    db_path: Path,
+    acquisition_id: int,
+    selected_id: int | None,
+) -> int | None:
+    """Render acquisition documents as a selectable table with row deletion."""
 
     if not documents:
         st.info("No documents recorded.")
-        return
+        return None
 
-    header_cols = st.columns([3, 3, 2, 1, 1])
-    header_cols[0].markdown("**Name**")
-    header_cols[1].markdown("**Title**")
-    header_cols[2].markdown("**Document type**")
+    rows = [
+        {
+            "Edit": document["id"] == selected_id,
+            "Name": Path(document["document_path"]).name,
+            "Title": document["title"] or "",
+            "Document type": document["document_type"] or "",
+            "Notes": document_notes_preview(document["notes"]),
+            "Delete": ":material/delete:",
+        }
+        for document in documents
+    ]
+    delete_click_key = f"document-delete-click-{acquisition_id}"
 
-    for document in documents:
-        row_cols = st.columns([3, 3, 2, 1, 1])
-        row_cols[0].write(Path(document["document_path"]).name)
-        row_cols[1].write(document["title"] or "")
-        row_cols[2].write(document["document_type"] or "")
-        if row_cols[3].button(
+    def queue_document_delete() -> None:
+        """Queue the document selected through the table's trash icon."""
+
+        click = st.session_state.get(delete_click_key)
+        if click is not None and 0 <= click["row"] < len(documents):
+            st.session_state["pending_document_delete"] = documents[click["row"]]["id"]
+
+    edited_rows = st.data_editor(
+        rows,
+        width="stretch",
+        hide_index=True,
+        disabled=["Name", "Title", "Document type", "Notes"],
+        column_config={
+            "Edit": st.column_config.CheckboxColumn(
+                "", width=48, pinned=True, alignment="center"
+            ),
+            "Name": st.column_config.TextColumn("Name", width=180),
+            "Title": st.column_config.TextColumn("Title", width=180),
+            "Document type": st.column_config.TextColumn(
+                "Document type", width=150
+            ),
+            "Notes": st.column_config.TextColumn("Notes", width=300),
+            "Delete": st.column_config.ButtonColumn(
+                "",
+                width=48,
+                alignment="center",
+                type="tertiary",
+                on_click=queue_document_delete,
+                key=delete_click_key,
+            ),
+        },
+        column_order=[
             "Edit",
-            icon=":material/edit:",
-            key=f"edit-document-{document['id']}",
-            help="Edit document details",
-            width="stretch",
-        ):
-            st.session_state["editing_document_id"] = document["id"]
-            st.rerun()
-        if row_cols[4].button(
+            "Name",
+            "Title",
+            "Document type",
+            "Notes",
             "Delete",
-            key=f"delete-document-{document['id']}",
-            width="stretch",
+        ],
+        key=f"documents-table-{acquisition_id}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        document["id"]
+        for document, row in zip(documents, edited_rows)
+        if row["Edit"]
+    ]
+    newly_checked = [
+        document_id for document_id in checked_ids if document_id != selected_id
+    ]
+    new_selected_id = (
+        newly_checked[-1]
+        if newly_checked
+        else selected_id if selected_id in checked_ids else None
+    )
+
+    pending_id = st.session_state.get("pending_document_delete")
+    pending_document = next(
+        (document for document in documents if document["id"] == pending_id), None
+    )
+    if pending_id is not None and pending_document is None:
+        st.session_state.pop("pending_document_delete", None)
+    if pending_document:
+        st.warning(f"Delete {Path(pending_document['document_path']).name}?")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button(
+            "Confirm delete", key=f"confirm-document-{pending_id}", width="stretch"
         ):
-            file_deleted = delete_managed_document_file(document["document_path"])
-            delete_acquisition_document(document["id"], db_path)
-            if st.session_state.get("editing_document_id") == document["id"]:
+            file_deleted = delete_managed_document_file(
+                pending_document["document_path"]
+            )
+            delete_acquisition_document(pending_id, db_path)
+            st.session_state.pop("pending_document_delete", None)
+            if st.session_state.get("editing_document_id") == pending_id:
                 st.session_state.pop("editing_document_id", None)
             if file_deleted:
                 st.warning("Document record and uploaded file deleted.")
             else:
                 st.warning("Document record deleted.")
             st.rerun()
+        if cancel_col.button(
+            "Cancel", key=f"cancel-document-{pending_id}", width="stretch"
+        ):
+            st.session_state.pop("pending_document_delete", None)
+            st.rerun()
+
+    return new_selected_id
 
 
 def type_options(records: list[dict]) -> list[int | None]:

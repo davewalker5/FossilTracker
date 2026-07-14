@@ -68,15 +68,12 @@ def main() -> None:
     st.caption("Personal fossil collection register")
 
     db_path = database_path()
+    st.caption(f"Database: {db_path}")
     try:
         apply_migrations(db_path)
     except RuntimeError as exc:
         st.error(str(exc))
         st.stop()
-
-    with st.sidebar:
-        st.subheader("Database")
-        st.code(str(db_path), language=None)
 
     main_tab_labels = [
         "Search",

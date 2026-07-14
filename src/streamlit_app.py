@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from fossil_tracker import __version__
 from fossil_tracker.config import APP_NAME, database_path
 from fossil_tracker.db import apply_migrations, get_specimen, list_specimens
 from ui.add_specimen import show_add_form
@@ -64,7 +65,7 @@ def main() -> None:
     """Run the Streamlit application."""
 
     st.set_page_config(page_title=APP_NAME, layout="wide")
-    st.title(APP_NAME)
+    st.title(f"{APP_NAME} v{__version__}")
     st.caption("Personal fossil collection register")
 
     db_path = database_path()

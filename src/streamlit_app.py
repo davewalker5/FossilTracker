@@ -75,6 +75,46 @@ def selected_specimen_exists(db_path) -> bool:
     return False
 
 
+def specimen_strapline(specimen: dict | None) -> str:
+    """Return the collection strapline for the current specimen."""
+
+    strapline = "Personal fossil collection register"
+    if specimen is None:
+        return strapline
+    label = " - ".join(
+        part for part in [specimen["collection_code"], specimen["title"]] if part
+    )
+    return f"{strapline}: {label}" if label else strapline
+
+
+def handle_main_tab_change() -> None:
+    """Clear the current specimen whenever the user enters Browse."""
+
+    if st.session_state.get("main_tabs") == "Browse":
+        st.session_state.pop("current_specimen_id", None)
+
+
+def apply_specimen_tab_style(specimen_selected: bool) -> None:
+    """Visually disable specimen-only tabs until a specimen is selected."""
+
+    if specimen_selected:
+        return
+    st.markdown(
+        """
+        <style>
+            .st-key-main_tabs [role="tablist"] > [role="tab"]:nth-child(n+3):nth-child(-n+10) {
+                color: var(--text-color);
+                cursor: not-allowed;
+                filter: grayscale(1);
+                opacity: 0.35;
+                pointer-events: none;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def show_specimen_required_fallback(db_path) -> None:
     """Render useful content when a specimen-specific tab is opened too early."""
 
@@ -91,18 +131,25 @@ def main() -> None:
     st.set_page_config(page_title=APP_NAME, layout="wide")
     apply_compact_header_style()
     st.title(f"{APP_NAME} v{__version__}")
-    st.caption("Personal fossil collection register")
 
     db_path = database_path()
-    st.caption(f"Database: {db_path}")
     try:
         apply_migrations(db_path)
     except RuntimeError as exc:
         st.error(str(exc))
         st.stop()
 
+    selected_specimen_available = selected_specimen_exists(db_path)
+    current_specimen = (
+        get_specimen(int(st.session_state["current_specimen_id"]), db_path)
+        if selected_specimen_available
+        else None
+    )
+    st.caption(specimen_strapline(current_specimen))
+    st.caption(f"Database: {db_path}")
+
     main_tab_labels = [
-        "Search",
+        "Browse",
         "Add specimen",
         "Edit specimen",
         "Taxonomy",
@@ -118,8 +165,14 @@ def main() -> None:
     pending_main_tab = st.session_state.pop("pending_main_tab", None)
     if pending_main_tab in main_tab_labels:
         st.session_state["main_tabs"] = pending_main_tab
+    unrestricted_tabs = {"Browse", "Add specimen", "Reference Data"}
+    if (
+        not selected_specimen_available
+        and st.session_state.get("main_tabs", "Browse") not in unrestricted_tabs
+    ):
+        st.session_state["main_tabs"] = "Browse"
 
-    selected_specimen_available = selected_specimen_exists(db_path)
+    apply_specimen_tab_style(selected_specimen_available)
 
     (
         tab_register,
@@ -136,7 +189,7 @@ def main() -> None:
     ) = st.tabs(
         main_tab_labels,
         key="main_tabs",
-        on_change="rerun",
+        on_change=handle_main_tab_change,
     )
 
     if tab_register.open:

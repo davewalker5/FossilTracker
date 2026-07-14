@@ -597,7 +597,9 @@ def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
     }
 
 
-def render_search_results(specimens: list[dict], db_path: Path) -> None:
+def render_search_results(
+    specimens: list[dict], db_path: Path, *, key: str = "specimen-search-results"
+) -> None:
     """Render Search results with row selection for editing.
 
     :param specimens: Matching specimen rows.
@@ -617,7 +619,7 @@ def render_search_results(specimens: list[dict], db_path: Path) -> None:
         width="stretch",
         on_select="rerun",
         selection_mode="single-row",
-        key="specimen-search-results",
+        key=key,
         column_order=[
             "Collection Code",
             "Title",

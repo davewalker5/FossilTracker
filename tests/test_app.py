@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fossil_tracker.config import PROJECT_ROOT
+from streamlit_app import specimen_strapline
 from ui.documents import document_notes_preview
 from ui.common import (
     delete_managed_document_file,
@@ -25,6 +26,7 @@ from ui.images import (
 )
 from ui.notes import observation_date_text
 from ui.provenance import parse_acquisition_date
+from ui.search import paginated_specimens
 
 
 class UploadedFile:
@@ -38,9 +40,29 @@ class UploadedFile:
 
 def test_document_notes_preview_truncates_long_notes() -> None:
     assert document_notes_preview("Short note") == "Short note"
-    assert document_notes_preview("x" * 100) == "x" * 100
-    assert document_notes_preview("x" * 101) == f"{'x' * 100}..."
+    assert document_notes_preview("x" * 50) == "x" * 50
+    assert document_notes_preview("x" * 51) == f"{'x' * 50}..."
 
+
+def test_paginated_specimens_limits_and_clamps_pages() -> None:
+    specimens = [{"id": specimen_id} for specimen_id in range(1, 24)]
+
+    first_page, current_page, page_count = paginated_specimens(specimens, 0)
+    assert [row["id"] for row in first_page] == list(range(1, 11))
+    assert current_page == 1
+    assert page_count == 3
+
+    last_page, current_page, page_count = paginated_specimens(specimens, 99)
+    assert [row["id"] for row in last_page] == [21, 22, 23]
+    assert current_page == 3
+    assert page_count == 3
+
+
+def test_specimen_strapline_includes_current_specimen() -> None:
+    assert specimen_strapline(None) == "Personal fossil collection register"
+    assert specimen_strapline(
+        {"collection_code": "FT-0001", "title": "Ammonite"}
+    ) == "Personal fossil collection register: FT-0001 - Ammonite"
 
 def test_save_uploaded_image_uses_configured_image_folder(tmp_path: Path, monkeypatch) -> None:
     image_folder = tmp_path / "images"

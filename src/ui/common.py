@@ -604,17 +604,53 @@ def render_taxonomy_table(records: list[dict]) -> None:
     )
 
 
-def render_geological_age_table(records: list[dict]) -> None:
+def _render_selectable_reference_table(
+    rows: list[dict],
+    records: list[dict],
+    selected_id: int | None,
+    *,
+    key: str,
+    column_config: dict | None = None,
+) -> int | None:
+    """Render a reference table with a single checkbox-based edit selection."""
+
+    if not records:
+        st.info("No records yet.")
+        return None
+
+    display_rows = [
+        {"Edit": row["id"] == selected_id, **display_row}
+        for row, display_row in zip(records, rows)
+    ]
+    edited_rows = st.data_editor(
+        display_rows,
+        width="stretch",
+        hide_index=True,
+        disabled=[column for column in display_rows[0] if column != "Edit"],
+        column_config={
+            "Edit": st.column_config.CheckboxColumn("Edit", width="small"),
+            **(column_config or {}),
+        },
+        key=f"{key}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        record["id"]
+        for record, edited_row in zip(records, edited_rows)
+        if edited_row["Edit"]
+    ]
+    newly_checked = [record_id for record_id in checked_ids if record_id != selected_id]
+    return newly_checked[-1] if newly_checked else (selected_id if selected_id in checked_ids else None)
+
+
+def render_geological_age_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "geological-age-table"
+) -> int | None:
     """Render geological age records as a scan-friendly table.
 
     :param records: Geological age rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Era": row["era"] or "",
@@ -626,8 +662,9 @@ def render_geological_age_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
             "Min Ma": st.column_config.NumberColumn("Min Ma", format="%.2f"),
@@ -635,17 +672,15 @@ def render_geological_age_table(records: list[dict]) -> None:
     )
 
 
-def render_locality_table(records: list[dict]) -> None:
+def render_locality_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "locality-table"
+) -> int | None:
     """Render locality records as a scan-friendly table.
 
     :param records: Locality rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Locality": row["locality_name"] or "",
@@ -660,8 +695,9 @@ def render_locality_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
             "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
@@ -670,17 +706,15 @@ def render_locality_table(records: list[dict]) -> None:
     )
 
 
-def render_preparation_type_table(records: list[dict]) -> None:
+def render_preparation_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "preparation-type-table"
+) -> int | None:
     """Render preparation type records as a scan-friendly table.
 
     :param records: Preparation type rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -688,8 +722,9 @@ def render_preparation_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),
@@ -697,17 +732,15 @@ def render_preparation_type_table(records: list[dict]) -> None:
     )
 
 
-def render_licence_table(records: list[dict]) -> None:
+def render_licence_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "licence-table"
+) -> int | None:
     """Render licence reference records as a scan-friendly table.
 
     :param records: Licence rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Licence name": row["name"] or "",
@@ -716,8 +749,9 @@ def render_licence_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Licence name": st.column_config.TextColumn("Licence name", width="medium"),
             "Licence URL": st.column_config.LinkColumn("Licence URL", width="medium"),
@@ -726,17 +760,15 @@ def render_licence_table(records: list[dict]) -> None:
     )
 
 
-def render_measurement_type_table(records: list[dict]) -> None:
+def render_measurement_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "measurement-type-table"
+) -> int | None:
     """Render measurement type records as a scan-friendly table.
 
     :param records: Measurement type rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -745,8 +777,9 @@ def render_measurement_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Unit": st.column_config.TextColumn("Unit", width="small"),
@@ -755,14 +788,12 @@ def render_measurement_type_table(records: list[dict]) -> None:
     )
 
 
-def render_simple_type_table(records: list[dict]) -> None:
+def render_simple_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "simple-type-table"
+) -> int | None:
     """Render reference type records as a scan-friendly table."""
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -770,8 +801,9 @@ def render_simple_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),

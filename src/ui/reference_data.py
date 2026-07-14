@@ -39,9 +39,6 @@ from fossil_tracker.db import (
     update_preparation_type,
 )
 from ui.common import (
-    geological_age_label,
-    locality_label,
-    option_index,
     render_geological_age_table,
     render_licence_table,
     render_locality_table,
@@ -49,6 +46,25 @@ from ui.common import (
     render_preparation_type_table,
     render_simple_type_table,
 )
+
+
+def _selected_record(records: list[dict], state_key: str, table_renderer, **kwargs) -> dict | None:
+    """Return the record selected through a reference table checkbox."""
+
+    selected_id = st.session_state.get(state_key)
+    if not any(row["id"] == selected_id for row in records):
+        selected_id = None
+    new_selected_id = table_renderer(records, selected_id, **kwargs)
+    if new_selected_id != selected_id:
+        st.session_state[state_key] = new_selected_id
+        st.rerun()
+    return next((row for row in records if row["id"] == selected_id), None)
+
+
+def _clear_selection(state_key: str) -> None:
+    """Clear the active reference record without changing persisted data."""
+
+    st.session_state[state_key] = None
 
 
 def show_context_manager(db_path: Path) -> None:
@@ -106,13 +122,9 @@ def show_geological_age_manager(db_path: Path) -> None:
 
     records = list_geological_ages(db_path)
     st.subheader("Geological ages")
-    render_geological_age_table(records)
-
-    choices = {"New geological age": None}
-    choices.update({f"{geological_age_label(row)} #{row['id']}": row["id"] for row in records})
-    selected = st.selectbox("Geological age", list(choices), key="geological-age-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in records if row["id"] == selected_id), None)
+    state_key = "selected-geological-age-id"
+    selected_row = _selected_record(records, state_key, render_geological_age_table)
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"geological-age-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         age_cols = st.columns([1, 1, 1, 1])
@@ -145,9 +157,10 @@ def show_geological_age_manager(db_path: Path) -> None:
             value="" if not selected_row or selected_row["min_ma"] is None else str(selected_row["min_ma"]),
             key=f"age-min-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_age = save_col.form_submit_button("Save geological age")
-        remove_age = delete_col.form_submit_button("Delete geological age", disabled=selected_row is None)
+        save_col, delete_col, clear_col = st.columns(3)
+        save_age = save_col.form_submit_button("Save")
+        remove_age = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_age = clear_col.form_submit_button("Clear")
 
     values = {
         "era": era,
@@ -157,6 +170,10 @@ def show_geological_age_manager(db_path: Path) -> None:
         "max_ma": max_ma,
         "min_ma": min_ma,
     }
+    if clear_age:
+        _clear_selection(state_key)
+        st.rerun()
+
     if save_age:
         if selected_row is None:
             create_geological_age(values, db_path)
@@ -184,13 +201,9 @@ def show_locality_manager(db_path: Path) -> None:
 
     records = list_localities(db_path)
     st.subheader("Localities")
-    render_locality_table(records)
-
-    choices = {"New locality": None}
-    choices.update({f"{locality_label(row)} #{row['id']}": row["id"] for row in records})
-    selected = st.selectbox("Locality", list(choices), key="locality-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in records if row["id"] == selected_id), None)
+    state_key = "selected-locality-id"
+    selected_row = _selected_record(records, state_key, render_locality_table)
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"locality-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         loc_cols = st.columns([1, 1, 1])
@@ -240,9 +253,10 @@ def show_locality_manager(db_path: Path) -> None:
             value=selected_row["locality_notes"] if selected_row and selected_row["locality_notes"] else "",
             key=f"locality-notes-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_locality = save_col.form_submit_button("Save locality")
-        remove_locality = delete_col.form_submit_button("Delete locality", disabled=selected_row is None)
+        save_col, delete_col, clear_col = st.columns(3)
+        save_locality = save_col.form_submit_button("Save")
+        remove_locality = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_locality = clear_col.form_submit_button("Clear")
 
     values = {
         "locality_name": locality_name,
@@ -255,6 +269,10 @@ def show_locality_manager(db_path: Path) -> None:
         "locality_precision": precision,
         "locality_notes": notes,
     }
+    if clear_locality:
+        _clear_selection(state_key)
+        st.rerun()
+
     if save_locality:
         if selected_row is None:
             create_locality(values, db_path)
@@ -282,13 +300,9 @@ def show_preparation_type_manager(db_path: Path) -> None:
 
     records = list_preparation_types(db_path)
     st.subheader("Preparation types")
-    render_preparation_type_table(records)
-
-    choices = {"New preparation type": None}
-    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in records})
-    selected = st.selectbox("Preparation type", list(choices), key="preparation-type-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in records if row["id"] == selected_id), None)
+    state_key = "selected-preparation-type-id"
+    selected_row = _selected_record(records, state_key, render_preparation_type_table)
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"preparation-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         name = st.text_input(
@@ -301,11 +315,14 @@ def show_preparation_type_manager(db_path: Path) -> None:
             value=selected_row["description"] if selected_row and selected_row["description"] else "",
             key=f"preparation-type-description-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_preparation = save_col.form_submit_button("Save preparation type")
-        remove_preparation = delete_col.form_submit_button(
-            "Delete preparation type", disabled=selected_row is None
-        )
+        save_col, delete_col, clear_col = st.columns(3)
+        save_preparation = save_col.form_submit_button("Save")
+        remove_preparation = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_preparation = clear_col.form_submit_button("Clear")
+
+    if clear_preparation:
+        _clear_selection(state_key)
+        st.rerun()
 
     if save_preparation:
         if not name.strip():
@@ -342,13 +359,9 @@ def show_licence_manager(db_path: Path) -> None:
 
     licences = list_licences(db_path)
     st.subheader("Licensing")
-    render_licence_table(licences)
-
-    choices = {"New licence": None}
-    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in licences})
-    selected = st.selectbox("Licence", list(choices), key="licence-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in licences if row["id"] == selected_id), None)
+    state_key = "selected-licence-id"
+    selected_row = _selected_record(licences, state_key, render_licence_table)
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"licence-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         name = st.text_input(
@@ -366,11 +379,14 @@ def show_licence_manager(db_path: Path) -> None:
             value=selected_row["notes"] if selected_row and selected_row["notes"] else "",
             key=f"licence-notes-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_licence = save_col.form_submit_button("Save licence")
-        remove_licence = delete_col.form_submit_button(
-            "Delete licence", disabled=selected_row is None
-        )
+        save_col, delete_col, clear_col = st.columns(3)
+        save_licence = save_col.form_submit_button("Save")
+        remove_licence = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_licence = clear_col.form_submit_button("Clear")
+
+    if clear_licence:
+        _clear_selection(state_key)
+        st.rerun()
 
     if save_licence:
         if not name.strip():
@@ -403,13 +419,9 @@ def show_measurement_type_manager(db_path: Path) -> None:
 
     measurement_types = list_measurement_types(db_path)
     st.subheader("Measurement types")
-    render_measurement_type_table(measurement_types)
-
-    choices = {"New measurement type": None}
-    choices.update({f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types})
-    selected = st.selectbox("Measurement type", list(choices), key="measurement-type-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in measurement_types if row["id"] == selected_id), None)
+    state_key = "selected-measurement-type-id"
+    selected_row = _selected_record(measurement_types, state_key, render_measurement_type_table)
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"measurement-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         form_cols = st.columns([2, 1])
@@ -428,11 +440,14 @@ def show_measurement_type_manager(db_path: Path) -> None:
             value=selected_row["description"] if selected_row and selected_row["description"] else "",
             key=f"measurement-type-description-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_measurement_type = save_col.form_submit_button("Save measurement type")
-        remove_measurement_type = delete_col.form_submit_button(
-            "Delete measurement type", disabled=selected_row is None
-        )
+        save_col, delete_col, clear_col = st.columns(3)
+        save_measurement_type = save_col.form_submit_button("Save")
+        remove_measurement_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_measurement_type = clear_col.form_submit_button("Clear")
+
+    if clear_measurement_type:
+        _clear_selection(state_key)
+        st.rerun()
 
     if save_measurement_type:
         if not name.strip():
@@ -473,13 +488,11 @@ def show_image_type_manager(db_path: Path) -> None:
 
     image_types = list_image_types(db_path)
     st.subheader("Image types")
-    render_simple_type_table(image_types)
-
-    choices = {"New image type": None}
-    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in image_types})
-    selected = st.selectbox("Image type", list(choices), key="image-type-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in image_types if row["id"] == selected_id), None)
+    state_key = "selected-image-type-id"
+    selected_row = _selected_record(
+        image_types, state_key, render_simple_type_table, key="image-type-table"
+    )
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(f"image-type-form-{selected_id or 'new'}", clear_on_submit=selected_id is None):
         name = st.text_input(
@@ -492,11 +505,14 @@ def show_image_type_manager(db_path: Path) -> None:
             value=selected_row["description"] if selected_row and selected_row["description"] else "",
             key=f"image-type-description-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_image_type = save_col.form_submit_button("Save image type")
-        remove_image_type = delete_col.form_submit_button(
-            "Delete image type", disabled=selected_row is None
-        )
+        save_col, delete_col, clear_col = st.columns(3)
+        save_image_type = save_col.form_submit_button("Save")
+        remove_image_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_image_type = clear_col.form_submit_button("Clear")
+
+    if clear_image_type:
+        _clear_selection(state_key)
+        st.rerun()
 
     if save_image_type:
         if not name.strip():
@@ -530,13 +546,11 @@ def show_document_type_manager(db_path: Path) -> None:
 
     document_types = list_document_types(db_path)
     st.subheader("Document types")
-    render_simple_type_table(document_types)
-
-    choices = {"New document type": None}
-    choices.update({f"{row['name']} #{row['id']}": row["id"] for row in document_types})
-    selected = st.selectbox("Document type", list(choices), key="document-type-select")
-    selected_id = choices[selected]
-    selected_row = next((row for row in document_types if row["id"] == selected_id), None)
+    state_key = "selected-document-type-id"
+    selected_row = _selected_record(
+        document_types, state_key, render_simple_type_table, key="document-type-table"
+    )
+    selected_id = selected_row["id"] if selected_row else None
 
     with st.form(
         f"document-type-form-{selected_id or 'new'}",
@@ -552,11 +566,14 @@ def show_document_type_manager(db_path: Path) -> None:
             value=selected_row["description"] if selected_row and selected_row["description"] else "",
             key=f"document-type-description-{selected_id or 'new'}",
         )
-        save_col, delete_col = st.columns([1, 1])
-        save_document_type = save_col.form_submit_button("Save document type")
-        remove_document_type = delete_col.form_submit_button(
-            "Delete document type", disabled=selected_row is None
-        )
+        save_col, delete_col, clear_col = st.columns(3)
+        save_document_type = save_col.form_submit_button("Save")
+        remove_document_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
+        clear_document_type = clear_col.form_submit_button("Clear")
+
+    if clear_document_type:
+        _clear_selection(state_key)
+        st.rerun()
 
     if save_document_type:
         if not name.strip():

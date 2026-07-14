@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "fossil-tracker"
-version = "1.4.0"
+version = "1.5.0"
 description = "Fossil Collection Tracker"
 readme = "README.md"
 requires-python = ">=3.13"

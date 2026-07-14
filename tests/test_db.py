@@ -700,6 +700,17 @@ def test_create_specimen_measurements_and_cascade_delete(db_path: Path) -> None:
     assert measurements[0]["measurement_unit"] == "mm"
     assert measurements[0]["value"] == "43.2"
 
+    db.update_specimen_measurement(
+        measurement_id,
+        {
+            "specimen_id": specimen_id,
+            "measurement_type_id": measurement_type_id,
+            "value": "44.5678",
+        },
+        db_path,
+    )
+    assert db.list_specimen_measurements(specimen_id, db_path)[0]["value"] == "44.568"
+
     with pytest.raises(sqlite3.IntegrityError):
         db.create_specimen_measurement(
             {

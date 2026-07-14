@@ -87,6 +87,28 @@ def create_specimen_measurement(
     )
 
 
+def update_specimen_measurement(
+    measurement_id: int,
+    values: dict[str, Any],
+    db_path: Path | None = None,
+) -> None:
+    """Update one specimen measurement record."""
+
+    measurement_type_id = _optional_int(values.get("measurement_type_id"))
+    value = _rounded_measurement_value(values.get("value"))
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    with connect(db_path) as connection:
+        connection.execute(
+            """
+            UPDATE specimen_measurements
+            SET measurement_type_id = ?, value = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (measurement_type_id, value, now, measurement_id),
+        )
+        connection.commit()
+
+
 def delete_specimen_measurement(
     measurement_id: int, db_path: Path | None = None
 ) -> None:

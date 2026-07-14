@@ -160,8 +160,11 @@ def render_specimen_observations(
 
 
 def render_specimen_measurements(
-    specimen_id: int, db_path: Path, allow_delete: bool = False
-) -> None:
+    specimen_id: int,
+    db_path: Path,
+    allow_delete: bool = False,
+    selected_id: int | None = None,
+) -> int | None:
     """Render measurements linked to one specimen.
 
     :param specimen_id: Specimen primary key.
@@ -173,48 +176,102 @@ def render_specimen_measurements(
     if not measurements:
         if allow_delete:
             st.info("No measurements recorded for this specimen.")
-        return
+        return None
 
-    header_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
-    header_columns[0].markdown("**Measurement**")
-    header_columns[1].markdown("**Value**")
-    header_columns[2].markdown("**Unit**")
+    rows = [
+        {
+            "Edit": measurement["id"] == selected_id,
+            "Measurement": measurement["measurement_name"],
+            "Value": measurement["value"],
+            "Unit": measurement["measurement_unit"],
+            "Delete": ":material/delete:" if allow_delete else "",
+        }
+        for measurement in measurements
+    ]
+    delete_click_key = f"measurement-delete-click-{specimen_id}"
+
+    def queue_measurement_delete() -> None:
+        """Queue the row selected through the table's trash icon."""
+
+        click = st.session_state.get(delete_click_key)
+        if click is not None and 0 <= click["row"] < len(measurements):
+            st.session_state["pending_measurement_delete"] = measurements[click["row"]]["id"]
+
+    column_config = {
+        "Edit": st.column_config.CheckboxColumn(
+            "", width=48, pinned=True, alignment="center"
+        ),
+        "Measurement": st.column_config.TextColumn("Measurement", width="large"),
+        "Value": st.column_config.TextColumn("Value", width="medium"),
+        "Unit": st.column_config.TextColumn("Unit", width="small"),
+    }
     if allow_delete:
-        header_columns[3].markdown("**Action**")
+        column_config["Delete"] = st.column_config.ButtonColumn(
+            "",
+            width=48,
+            alignment="center",
+            type="tertiary",
+            on_click=queue_measurement_delete,
+            key=delete_click_key,
+        )
 
-    for measurement in measurements:
-        row_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
-        row_columns[0].write(measurement["measurement_name"])
-        row_columns[1].write(measurement["value"])
-        row_columns[2].write(measurement["measurement_unit"])
-        if allow_delete:
-            if row_columns[3].button(
-                "Delete", key=f"delete-measurement-{measurement['id']}", width="stretch"
-            ):
-                st.session_state["pending_measurement_delete"] = measurement["id"]
-                st.rerun()
+    edited_rows = st.data_editor(
+        rows,
+        width="stretch",
+        hide_index=True,
+        disabled=["Measurement", "Value", "Unit"],
+        column_config=column_config,
+        column_order=[
+            "Edit",
+            "Measurement",
+            "Value",
+            "Unit",
+            *(("Delete",) if allow_delete else ()),
+        ],
+        key=f"specimen-measurements-{specimen_id}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        measurement["id"]
+        for measurement, row in zip(measurements, edited_rows)
+        if row["Edit"]
+    ]
+    newly_checked = [
+        measurement_id
+        for measurement_id in checked_ids
+        if measurement_id != selected_id
+    ]
+    new_selected_id = (
+        newly_checked[-1]
+        if newly_checked
+        else selected_id if selected_id in checked_ids else None
+    )
 
-            if st.session_state.get("pending_measurement_delete") == measurement["id"]:
-                st.warning(
-                    f"Delete {measurement['measurement_name']} measurement?"
-                )
-                confirm_col, cancel_col = st.columns([1, 1])
-                if confirm_col.button(
-                    "Confirm delete",
-                    key=f"confirm-measurement-{measurement['id']}",
-                    width="stretch",
-                ):
-                    delete_specimen_measurement(measurement["id"], db_path)
-                    st.session_state.pop("pending_measurement_delete", None)
-                    st.warning("Measurement deleted.")
-                    st.rerun()
-                if cancel_col.button(
-                    "Cancel",
-                    key=f"cancel-measurement-{measurement['id']}",
-                    width="stretch",
-                ):
-                    st.session_state.pop("pending_measurement_delete", None)
-                    st.rerun()
+    pending_id = st.session_state.get("pending_measurement_delete")
+    pending_measurement = next(
+        (measurement for measurement in measurements if measurement["id"] == pending_id),
+        None,
+    )
+    if pending_id is not None and pending_measurement is None:
+        st.session_state.pop("pending_measurement_delete", None)
+    if pending_measurement:
+        st.warning(f"Delete {pending_measurement['measurement_name']} measurement?")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button(
+            "Confirm delete", key=f"confirm-measurement-{pending_id}", width="stretch"
+        ):
+            delete_specimen_measurement(pending_id, db_path)
+            st.session_state.pop("pending_measurement_delete", None)
+            if st.session_state.get("editing_measurement_id") == pending_id:
+                st.session_state.pop("editing_measurement_id", None)
+            st.warning("Measurement deleted.")
+            st.rerun()
+        if cancel_col.button(
+            "Cancel", key=f"cancel-measurement-{pending_id}", width="stretch"
+        ):
+            st.session_state.pop("pending_measurement_delete", None)
+            st.rerun()
+
+    return new_selected_id
 
 
 def render_related_links(

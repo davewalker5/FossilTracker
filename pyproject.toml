@@ -9,7 +9,7 @@ description = "Fossil Collection Tracker"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-  "streamlit",
+  "streamlit>=1.59,<2",
   "datasette",
   "yoyo-migrations"
 ]

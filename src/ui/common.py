@@ -138,17 +138,33 @@ def render_specimen_observations(
             heading = f"{heading} - {observation['observation_date']}"
         with st.expander(heading, expanded=allow_delete):
             st.markdown(observation["notes"])
-            if allow_delete and st.button(
-                "Delete observation", key=f"delete-observation-{observation['id']}"
-            ):
-                delete_observation(observation["id"], db_path)
-                st.warning("Observation deleted.")
-                st.rerun()
+            if allow_delete:
+                edit_col, delete_col = st.columns(2)
+                if edit_col.button(
+                    "Edit",
+                    key=f"edit-observation-{observation['id']}",
+                    width="stretch",
+                ):
+                    st.session_state["editing_observation_id"] = observation["id"]
+                    st.rerun()
+                if delete_col.button(
+                    "Delete",
+                    key=f"delete-observation-{observation['id']}",
+                    width="stretch",
+                ):
+                    delete_observation(observation["id"], db_path)
+                    if st.session_state.get("editing_observation_id") == observation["id"]:
+                        st.session_state.pop("editing_observation_id", None)
+                    st.warning("Observation deleted.")
+                    st.rerun()
 
 
 def render_specimen_measurements(
-    specimen_id: int, db_path: Path, allow_delete: bool = False
-) -> None:
+    specimen_id: int,
+    db_path: Path,
+    allow_delete: bool = False,
+    selected_id: int | None = None,
+) -> int | None:
     """Render measurements linked to one specimen.
 
     :param specimen_id: Specimen primary key.
@@ -160,48 +176,102 @@ def render_specimen_measurements(
     if not measurements:
         if allow_delete:
             st.info("No measurements recorded for this specimen.")
-        return
+        return None
 
-    header_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
-    header_columns[0].markdown("**Measurement**")
-    header_columns[1].markdown("**Value**")
-    header_columns[2].markdown("**Unit**")
+    rows = [
+        {
+            "Edit": measurement["id"] == selected_id,
+            "Measurement": measurement["measurement_name"],
+            "Value": measurement["value"],
+            "Unit": measurement["measurement_unit"],
+            "Delete": ":material/delete:" if allow_delete else "",
+        }
+        for measurement in measurements
+    ]
+    delete_click_key = f"measurement-delete-click-{specimen_id}"
+
+    def queue_measurement_delete() -> None:
+        """Queue the row selected through the table's trash icon."""
+
+        click = st.session_state.get(delete_click_key)
+        if click is not None and 0 <= click["row"] < len(measurements):
+            st.session_state["pending_measurement_delete"] = measurements[click["row"]]["id"]
+
+    column_config = {
+        "Edit": st.column_config.CheckboxColumn(
+            "", width=48, pinned=True, alignment="center"
+        ),
+        "Measurement": st.column_config.TextColumn("Measurement", width="large"),
+        "Value": st.column_config.TextColumn("Value", width="medium"),
+        "Unit": st.column_config.TextColumn("Unit", width="small"),
+    }
     if allow_delete:
-        header_columns[3].markdown("**Action**")
+        column_config["Delete"] = st.column_config.ButtonColumn(
+            "",
+            width=48,
+            alignment="center",
+            type="tertiary",
+            on_click=queue_measurement_delete,
+            key=delete_click_key,
+        )
 
-    for measurement in measurements:
-        row_columns = st.columns([3, 2, 1, 1] if allow_delete else [3, 2, 1])
-        row_columns[0].write(measurement["measurement_name"])
-        row_columns[1].write(measurement["value"])
-        row_columns[2].write(measurement["measurement_unit"])
-        if allow_delete:
-            if row_columns[3].button(
-                "Delete", key=f"delete-measurement-{measurement['id']}", width="stretch"
-            ):
-                st.session_state["pending_measurement_delete"] = measurement["id"]
-                st.rerun()
+    edited_rows = st.data_editor(
+        rows,
+        width="stretch",
+        hide_index=True,
+        disabled=["Measurement", "Value", "Unit"],
+        column_config=column_config,
+        column_order=[
+            "Edit",
+            "Measurement",
+            "Value",
+            "Unit",
+            *(("Delete",) if allow_delete else ()),
+        ],
+        key=f"specimen-measurements-{specimen_id}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        measurement["id"]
+        for measurement, row in zip(measurements, edited_rows)
+        if row["Edit"]
+    ]
+    newly_checked = [
+        measurement_id
+        for measurement_id in checked_ids
+        if measurement_id != selected_id
+    ]
+    new_selected_id = (
+        newly_checked[-1]
+        if newly_checked
+        else selected_id if selected_id in checked_ids else None
+    )
 
-            if st.session_state.get("pending_measurement_delete") == measurement["id"]:
-                st.warning(
-                    f"Delete {measurement['measurement_name']} measurement?"
-                )
-                confirm_col, cancel_col = st.columns([1, 1])
-                if confirm_col.button(
-                    "Confirm delete",
-                    key=f"confirm-measurement-{measurement['id']}",
-                    width="stretch",
-                ):
-                    delete_specimen_measurement(measurement["id"], db_path)
-                    st.session_state.pop("pending_measurement_delete", None)
-                    st.warning("Measurement deleted.")
-                    st.rerun()
-                if cancel_col.button(
-                    "Cancel",
-                    key=f"cancel-measurement-{measurement['id']}",
-                    width="stretch",
-                ):
-                    st.session_state.pop("pending_measurement_delete", None)
-                    st.rerun()
+    pending_id = st.session_state.get("pending_measurement_delete")
+    pending_measurement = next(
+        (measurement for measurement in measurements if measurement["id"] == pending_id),
+        None,
+    )
+    if pending_id is not None and pending_measurement is None:
+        st.session_state.pop("pending_measurement_delete", None)
+    if pending_measurement:
+        st.warning(f"Delete {pending_measurement['measurement_name']} measurement?")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button(
+            "Confirm delete", key=f"confirm-measurement-{pending_id}", width="stretch"
+        ):
+            delete_specimen_measurement(pending_id, db_path)
+            st.session_state.pop("pending_measurement_delete", None)
+            if st.session_state.get("editing_measurement_id") == pending_id:
+                st.session_state.pop("editing_measurement_id", None)
+            st.warning("Measurement deleted.")
+            st.rerun()
+        if cancel_col.button(
+            "Cancel", key=f"cancel-measurement-{pending_id}", width="stretch"
+        ):
+            st.session_state.pop("pending_measurement_delete", None)
+            st.rerun()
+
+    return new_selected_id
 
 
 def render_related_links(
@@ -527,7 +597,9 @@ def search_result_row(specimen: dict, db_path: Path) -> dict[str, str]:
     }
 
 
-def render_search_results(specimens: list[dict], db_path: Path) -> None:
+def render_search_results(
+    specimens: list[dict], db_path: Path, *, key: str = "specimen-search-results"
+) -> None:
     """Render Search results with row selection for editing.
 
     :param specimens: Matching specimen rows.
@@ -547,7 +619,7 @@ def render_search_results(specimens: list[dict], db_path: Path) -> None:
         width="stretch",
         on_select="rerun",
         selection_mode="single-row",
-        key="specimen-search-results",
+        key=key,
         column_order=[
             "Collection Code",
             "Title",
@@ -604,17 +676,55 @@ def render_taxonomy_table(records: list[dict]) -> None:
     )
 
 
-def render_geological_age_table(records: list[dict]) -> None:
+def _render_selectable_reference_table(
+    rows: list[dict],
+    records: list[dict],
+    selected_id: int | None,
+    *,
+    key: str,
+    column_config: dict | None = None,
+) -> int | None:
+    """Render a reference table with a single checkbox-based edit selection."""
+
+    if not records:
+        st.info("No records yet.")
+        return None
+
+    display_rows = [
+        {"Edit": row["id"] == selected_id, **display_row}
+        for row, display_row in zip(records, rows)
+    ]
+    edited_rows = st.data_editor(
+        display_rows,
+        width="stretch",
+        hide_index=True,
+        disabled=[column for column in display_rows[0] if column != "Edit"],
+        column_config={
+            "Edit": st.column_config.CheckboxColumn(
+                "", width=48, pinned=True, alignment="center"
+            ),
+            **(column_config or {}),
+        },
+        key=f"{key}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        record["id"]
+        for record, edited_row in zip(records, edited_rows)
+        if edited_row["Edit"]
+    ]
+    newly_checked = [record_id for record_id in checked_ids if record_id != selected_id]
+    return newly_checked[-1] if newly_checked else (selected_id if selected_id in checked_ids else None)
+
+
+def render_geological_age_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "geological-age-table"
+) -> int | None:
     """Render geological age records as a scan-friendly table.
 
     :param records: Geological age rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Era": row["era"] or "",
@@ -626,8 +736,9 @@ def render_geological_age_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Max Ma": st.column_config.NumberColumn("Max Ma", format="%.2f"),
             "Min Ma": st.column_config.NumberColumn("Min Ma", format="%.2f"),
@@ -635,17 +746,15 @@ def render_geological_age_table(records: list[dict]) -> None:
     )
 
 
-def render_locality_table(records: list[dict]) -> None:
+def render_locality_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "locality-table"
+) -> int | None:
     """Render locality records as a scan-friendly table.
 
     :param records: Locality rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Locality": row["locality_name"] or "",
@@ -660,8 +769,9 @@ def render_locality_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Latitude": st.column_config.NumberColumn("Latitude", format="%.6f"),
             "Longitude": st.column_config.NumberColumn("Longitude", format="%.6f"),
@@ -670,17 +780,15 @@ def render_locality_table(records: list[dict]) -> None:
     )
 
 
-def render_preparation_type_table(records: list[dict]) -> None:
+def render_preparation_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "preparation-type-table"
+) -> int | None:
     """Render preparation type records as a scan-friendly table.
 
     :param records: Preparation type rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -688,8 +796,9 @@ def render_preparation_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),
@@ -697,17 +806,15 @@ def render_preparation_type_table(records: list[dict]) -> None:
     )
 
 
-def render_licence_table(records: list[dict]) -> None:
+def render_licence_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "licence-table"
+) -> int | None:
     """Render licence reference records as a scan-friendly table.
 
     :param records: Licence rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Licence name": row["name"] or "",
@@ -716,8 +823,9 @@ def render_licence_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Licence name": st.column_config.TextColumn("Licence name", width="medium"),
             "Licence URL": st.column_config.LinkColumn("Licence URL", width="medium"),
@@ -726,17 +834,15 @@ def render_licence_table(records: list[dict]) -> None:
     )
 
 
-def render_measurement_type_table(records: list[dict]) -> None:
+def render_measurement_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "measurement-type-table"
+) -> int | None:
     """Render measurement type records as a scan-friendly table.
 
     :param records: Measurement type rows to display.
     """
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -745,8 +851,9 @@ def render_measurement_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Unit": st.column_config.TextColumn("Unit", width="small"),
@@ -755,14 +862,12 @@ def render_measurement_type_table(records: list[dict]) -> None:
     )
 
 
-def render_simple_type_table(records: list[dict]) -> None:
+def render_simple_type_table(
+    records: list[dict], selected_id: int | None = None, *, key: str = "simple-type-table"
+) -> int | None:
     """Render reference type records as a scan-friendly table."""
 
-    if not records:
-        st.info("No records yet.")
-        return
-
-    st.dataframe(
+    return _render_selectable_reference_table(
         [
             {
                 "Name": row["name"] or "",
@@ -770,8 +875,9 @@ def render_simple_type_table(records: list[dict]) -> None:
             }
             for row in records
         ],
-        width="stretch",
-        hide_index=True,
+        records,
+        selected_id,
+        key=key,
         column_config={
             "Name": st.column_config.TextColumn("Name", width="medium"),
             "Description": st.column_config.TextColumn("Description", width="large"),

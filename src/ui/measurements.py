@@ -16,6 +16,7 @@ from fossil_tracker.db import (
     list_specimen_measurements,
     list_specimens,
     save_specimen_measurements,
+    update_specimen_measurement,
 )
 from ui.common import (
     remember_default_specimen,
@@ -151,38 +152,88 @@ def _show_standard_measurements(specimen_id: int, db_path: Path) -> None:
 
     # Preserve the original free-choice measurement workflow in its own tab.
     st.subheader("Measurements")
-    render_specimen_measurements(specimen_id, db_path, allow_delete=True)
+    measurements = list_specimen_measurements(specimen_id, db_path)
+    selected_id = st.session_state.get("editing_measurement_id")
+    if not any(measurement["id"] == selected_id for measurement in measurements):
+        selected_id = None
+        st.session_state.pop("editing_measurement_id", None)
+    new_selected_id = render_specimen_measurements(
+        specimen_id, db_path, allow_delete=True, selected_id=selected_id
+    )
+    if new_selected_id != selected_id:
+        st.session_state["editing_measurement_id"] = new_selected_id
+        st.rerun()
+    selected_measurement = next(
+        (measurement for measurement in measurements if measurement["id"] == selected_id),
+        None,
+    )
     measurement_types = list_measurement_types(db_path)
     if not measurement_types:
         st.info("Add a measurement type in Reference Data before recording measurements.")
         return
     type_choices = {f"{row['name']} ({row['unit']})": row["id"] for row in measurement_types}
-    with st.form("add-specimen-measurement", clear_on_submit=True):
-        measurement_type_label = st.selectbox("Measurement type", list(type_choices))
-        value = st.text_input("Value")
-        submitted = st.form_submit_button("Add measurement")
+    type_labels = list(type_choices)
+    selected_type_index = 0
+    if selected_measurement:
+        selected_type_index = next(
+            (
+                index
+                for index, label in enumerate(type_labels)
+                if type_choices[label] == selected_measurement["measurement_type_id"]
+            ),
+            0,
+        )
+    form_suffix = selected_measurement["id"] if selected_measurement else "new"
+    with st.form(
+        f"specimen-measurement-form-{form_suffix}",
+        clear_on_submit=selected_measurement is None,
+    ):
+        measurement_type_label = st.selectbox(
+            "Measurement type",
+            type_labels,
+            index=selected_type_index,
+            key=f"specimen-measurement-type-{form_suffix}",
+        )
+        value = st.text_input(
+            "Value",
+            value=selected_measurement["value"] if selected_measurement else "",
+            key=f"specimen-measurement-value-{form_suffix}",
+        )
+        action_col, clear_col = st.columns(2)
+        submitted = action_col.form_submit_button(
+            "Save" if selected_measurement else "Add", width="stretch"
+        )
+        clear_measurement = clear_col.form_submit_button("Clear", width="stretch")
+
+    if clear_measurement:
+        st.session_state.pop("editing_measurement_id", None)
+        st.rerun()
     if not submitted:
         return
     if not value.strip():
         st.error("Measurement value is required.")
         return
     try:
-        # Generic entry retains insert-only behavior to guard against accidental replacement.
-        create_specimen_measurement(
-            {
-                "specimen_id": specimen_id,
-                "measurement_type_id": type_choices[measurement_type_label],
-                "value": value.strip(),
-            },
-            db_path,
-        )
+        values = {
+            "specimen_id": specimen_id,
+            "measurement_type_id": type_choices[measurement_type_label],
+            "value": value.strip(),
+        }
+        if selected_measurement:
+            update_specimen_measurement(selected_measurement["id"], values, db_path)
+        else:
+            create_specimen_measurement(values, db_path)
     except ValueError:
         st.error("Measurement value must be a number.")
         return
     except sqlite3.IntegrityError:
         st.error("This specimen already has that measurement type.")
         return
-    st.success("Measurement added.")
+    if selected_measurement:
+        st.session_state.pop("editing_measurement_id", None)
+        st.success("Measurement updated.")
+    else:
+        st.success("Measurement added.")
     st.rerun()
 
 
@@ -223,7 +274,7 @@ def _show_ammonite_measurements(specimen_id: int, db_path: Path) -> None:
             "Whorl Width (Ww) in mm", min_value=0.0,
             value=_current_float(existing, AMMONITE_SOURCE_TYPES[3]),
         )
-        submitted = st.form_submit_button("Save ammonite measurements")
+        submitted = st.form_submit_button("Save")
     if not submitted:
         return
     if diameter <= 0 or height <= 0:
@@ -295,7 +346,7 @@ def _show_orthocone_measurements(specimen_id: int, db_path: Path) -> None:
             "Siphuncle Diameter in mm (optional)",
             value=existing.get("Siphuncle Diameter", ""),
         )
-        submitted = st.form_submit_button("Save Orthocone Measurements")
+        submitted = st.form_submit_button("Save")
 
     # Show calculated values from the current form state as an immediate reference.
     calculated = None

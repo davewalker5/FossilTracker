@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from fossil_tracker import __version__
 from fossil_tracker.config import APP_NAME, database_path
-from fossil_tracker.db import apply_migrations, get_specimen, list_specimens, seed_specimens
+from fossil_tracker.db import apply_migrations, get_specimen, list_specimens
 from ui.add_specimen import show_add_form
 from ui.documents import show_acquisition_documents
 from ui.edit_specimen import show_edit_form
@@ -31,6 +32,30 @@ SPECIMEN_REQUIRED_TABS = {
 }
 
 
+def apply_compact_header_style() -> None:
+    """Reduce the Streamlit toolbar height while retaining its controls."""
+
+    st.markdown(
+        """
+        <style>
+            header[data-testid="stHeader"] {
+                height: 2.75rem;
+                min-height: 2.75rem;
+            }
+
+            div[data-testid="stToolbar"] {
+                height: 2.75rem;
+            }
+
+            div[data-testid="stMainBlockContainer"] {
+                padding-top: 3.5rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def selected_specimen_exists(db_path) -> bool:
     """Return whether the current session specimen id points to an existing specimen."""
 
@@ -50,6 +75,46 @@ def selected_specimen_exists(db_path) -> bool:
     return False
 
 
+def specimen_strapline(specimen: dict | None) -> str:
+    """Return the collection strapline for the current specimen."""
+
+    strapline = "Personal fossil collection register"
+    if specimen is None:
+        return strapline
+    label = " - ".join(
+        part for part in [specimen["collection_code"], specimen["title"]] if part
+    )
+    return f"{strapline}: {label}" if label else strapline
+
+
+def handle_main_tab_change() -> None:
+    """Clear the current specimen whenever the user enters Browse."""
+
+    if st.session_state.get("main_tabs") == "Browse":
+        st.session_state.pop("current_specimen_id", None)
+
+
+def apply_specimen_tab_style(specimen_selected: bool) -> None:
+    """Visually disable specimen-only tabs until a specimen is selected."""
+
+    if specimen_selected:
+        return
+    st.markdown(
+        """
+        <style>
+            .st-key-main_tabs [role="tablist"] > [role="tab"]:nth-child(n+3):nth-child(-n+10) {
+                color: var(--text-color);
+                cursor: not-allowed;
+                filter: grayscale(1);
+                opacity: 0.35;
+                pointer-events: none;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def show_specimen_required_fallback(db_path) -> None:
     """Render useful content when a specimen-specific tab is opened too early."""
 
@@ -64,8 +129,8 @@ def main() -> None:
     """Run the Streamlit application."""
 
     st.set_page_config(page_title=APP_NAME, layout="wide")
-    st.title(APP_NAME)
-    st.caption("Personal fossil collection register")
+    apply_compact_header_style()
+    st.title(f"{APP_NAME} v{__version__}")
 
     db_path = database_path()
     try:
@@ -74,15 +139,17 @@ def main() -> None:
         st.error(str(exc))
         st.stop()
 
-    with st.sidebar:
-        st.subheader("Database")
-        st.code(str(db_path), language=None)
-        if st.button("Add starter records", width="stretch"):
-            added = seed_specimens(db_path)
-            st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
+    selected_specimen_available = selected_specimen_exists(db_path)
+    current_specimen = (
+        get_specimen(int(st.session_state["current_specimen_id"]), db_path)
+        if selected_specimen_available
+        else None
+    )
+    st.caption(specimen_strapline(current_specimen))
+    st.caption(f"Database: {db_path}")
 
     main_tab_labels = [
-        "Search",
+        "Browse",
         "Add specimen",
         "Edit specimen",
         "Taxonomy",
@@ -98,8 +165,14 @@ def main() -> None:
     pending_main_tab = st.session_state.pop("pending_main_tab", None)
     if pending_main_tab in main_tab_labels:
         st.session_state["main_tabs"] = pending_main_tab
+    unrestricted_tabs = {"Browse", "Add specimen", "Reference Data"}
+    if (
+        not selected_specimen_available
+        and st.session_state.get("main_tabs", "Browse") not in unrestricted_tabs
+    ):
+        st.session_state["main_tabs"] = "Browse"
 
-    selected_specimen_available = selected_specimen_exists(db_path)
+    apply_specimen_tab_style(selected_specimen_available)
 
     (
         tab_register,
@@ -116,7 +189,7 @@ def main() -> None:
     ) = st.tabs(
         main_tab_labels,
         key="main_tabs",
-        on_change="rerun",
+        on_change=handle_main_tab_change,
     )
 
     if tab_register.open:

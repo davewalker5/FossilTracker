@@ -50,13 +50,18 @@ def show_related_links(db_path: Path) -> None:
 
     st.subheader("Related links")
     links = list_related_links(specimen["id"], db_path)
-    render_related_link_table(links, db_path)
-
     editing_id = st.session_state.get("editing_related_link_id")
-    selected_link = next((link for link in links if link["id"] == editing_id), None)
-    if editing_id is not None and selected_link is None:
+    if not any(link["id"] == editing_id for link in links):
         st.session_state.pop("editing_related_link_id", None)
         editing_id = None
+    new_editing_id = render_related_link_table(
+        links, db_path, specimen["id"], editing_id
+    )
+    if new_editing_id != editing_id:
+        st.session_state["editing_related_link_id"] = new_editing_id
+        st.session_state.pop("pending_related_link_delete", None)
+        st.rerun()
+    selected_link = next((link for link in links if link["id"] == editing_id), None)
 
     with st.form(
         f"related-link-form-{editing_id or 'new'}",
@@ -77,7 +82,13 @@ def show_related_links(db_path: Path) -> None:
             value=(selected_link["description"] or "") if selected_link else "",
             key=f"related-link-description-{editing_id or 'new'}",
         )
-        save_link = st.form_submit_button("Save link")
+        save_col, clear_col = st.columns(2)
+        save_link = save_col.form_submit_button("Save", width="stretch")
+        clear_link = clear_col.form_submit_button("Clear", width="stretch")
+
+    if clear_link:
+        st.session_state.pop("editing_related_link_id", None)
+        st.rerun()
 
     if save_link:
         cleaned_url = url.strip()
@@ -101,8 +112,13 @@ def show_related_links(db_path: Path) -> None:
         st.rerun()
 
 
-def render_related_link_table(links: list[dict], db_path: Path) -> None:
-    """Render related links as an editable table-like list.
+def render_related_link_table(
+    links: list[dict],
+    db_path: Path,
+    specimen_id: int,
+    selected_id: int | None,
+) -> int | None:
+    """Render related links as a selectable table with row deletion.
 
     :param links: Related link rows for the selected specimen.
     :param db_path: SQLite database path.
@@ -110,53 +126,81 @@ def render_related_link_table(links: list[dict], db_path: Path) -> None:
 
     if not links:
         st.info("No related links recorded for this specimen.")
-        return
+        return None
 
-    header_cols = st.columns([3, 2, 4, 1, 1])
-    header_cols[0].markdown("**Link**")
-    header_cols[1].markdown("**Title**")
-    header_cols[2].markdown("**Description**")
+    rows = [
+        {
+            "Edit": link["id"] == selected_id,
+            "Link": link["url"],
+            "Title": link["title"] or "",
+            "Description": link["description"] or "",
+            "Delete": ":material/delete:",
+        }
+        for link in links
+    ]
+    delete_click_key = f"related-link-delete-click-{specimen_id}"
 
-    for link in links:
-        row_cols = st.columns([3, 2, 4, 1, 1])
-        row_cols[0].markdown(f"[{link['url']}]({link['url']})")
-        row_cols[1].write(link["title"] or "")
-        row_cols[2].write(link["description"] or "")
-        if row_cols[3].button(
-            "Edit",
-            icon=":material/edit:",
-            key=f"edit-related-link-{link['id']}",
-            help="Edit link",
-            width="stretch",
+    def queue_link_delete() -> None:
+        """Queue the link selected through the table's trash icon."""
+
+        click = st.session_state.get(delete_click_key)
+        if click is not None and 0 <= click["row"] < len(links):
+            st.session_state["pending_related_link_delete"] = links[click["row"]]["id"]
+
+    edited_rows = st.data_editor(
+        rows,
+        width="stretch",
+        hide_index=True,
+        disabled=["Link", "Title", "Description"],
+        column_config={
+            "Edit": st.column_config.CheckboxColumn(
+                "", width=48, pinned=True, alignment="center"
+            ),
+            "Link": st.column_config.LinkColumn("Link", width="large"),
+            "Title": st.column_config.TextColumn("Title", width="medium"),
+            "Description": st.column_config.TextColumn("Description", width="large"),
+            "Delete": st.column_config.ButtonColumn(
+                "",
+                width=48,
+                alignment="center",
+                type="tertiary",
+                on_click=queue_link_delete,
+                key=delete_click_key,
+            ),
+        },
+        column_order=["Edit", "Link", "Title", "Description", "Delete"],
+        key=f"related-links-table-{specimen_id}-{selected_id or 'new'}",
+    )
+    checked_ids = [
+        link["id"] for link, row in zip(links, edited_rows) if row["Edit"]
+    ]
+    newly_checked = [link_id for link_id in checked_ids if link_id != selected_id]
+    new_selected_id = (
+        newly_checked[-1]
+        if newly_checked
+        else selected_id if selected_id in checked_ids else None
+    )
+
+    pending_id = st.session_state.get("pending_related_link_delete")
+    pending_link = next((link for link in links if link["id"] == pending_id), None)
+    if pending_id is not None and pending_link is None:
+        st.session_state.pop("pending_related_link_delete", None)
+    if pending_link:
+        st.warning(f"Delete {pending_link['title'] or pending_link['url']}?")
+        confirm_col, cancel_col = st.columns(2)
+        if confirm_col.button(
+            "Confirm delete", key=f"confirm-related-link-{pending_id}", width="stretch"
         ):
-            st.session_state["editing_related_link_id"] = link["id"]
+            delete_related_link(pending_id, db_path)
+            st.session_state.pop("pending_related_link_delete", None)
+            if st.session_state.get("editing_related_link_id") == pending_id:
+                st.session_state.pop("editing_related_link_id", None)
+            st.warning("Link deleted.")
+            st.rerun()
+        if cancel_col.button(
+            "Cancel", key=f"cancel-related-link-{pending_id}", width="stretch"
+        ):
             st.session_state.pop("pending_related_link_delete", None)
             st.rerun()
-        if row_cols[4].button(
-            "Delete",
-            key=f"delete-related-link-{link['id']}",
-            width="stretch",
-        ):
-            st.session_state["pending_related_link_delete"] = link["id"]
-            st.rerun()
 
-        if st.session_state.get("pending_related_link_delete") == link["id"]:
-            confirm_col, cancel_col = st.columns([1, 1])
-            if confirm_col.button(
-                "Confirm delete",
-                key=f"confirm-related-link-{link['id']}",
-                width="stretch",
-            ):
-                delete_related_link(link["id"], db_path)
-                st.session_state.pop("pending_related_link_delete", None)
-                if st.session_state.get("editing_related_link_id") == link["id"]:
-                    st.session_state.pop("editing_related_link_id", None)
-                st.warning("Link deleted.")
-                st.rerun()
-            if cancel_col.button(
-                "Cancel",
-                key=f"cancel-related-link-{link['id']}",
-                width="stretch",
-            ):
-                st.session_state.pop("pending_related_link_delete", None)
-                st.rerun()
+    return new_selected_id

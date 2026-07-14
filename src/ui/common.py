@@ -138,12 +138,25 @@ def render_specimen_observations(
             heading = f"{heading} - {observation['observation_date']}"
         with st.expander(heading, expanded=allow_delete):
             st.markdown(observation["notes"])
-            if allow_delete and st.button(
-                "Delete observation", key=f"delete-observation-{observation['id']}"
-            ):
-                delete_observation(observation["id"], db_path)
-                st.warning("Observation deleted.")
-                st.rerun()
+            if allow_delete:
+                edit_col, delete_col = st.columns(2)
+                if edit_col.button(
+                    "Edit",
+                    key=f"edit-observation-{observation['id']}",
+                    width="stretch",
+                ):
+                    st.session_state["editing_observation_id"] = observation["id"]
+                    st.rerun()
+                if delete_col.button(
+                    "Delete",
+                    key=f"delete-observation-{observation['id']}",
+                    width="stretch",
+                ):
+                    delete_observation(observation["id"], db_path)
+                    if st.session_state.get("editing_observation_id") == observation["id"]:
+                        st.session_state.pop("editing_observation_id", None)
+                    st.warning("Observation deleted.")
+                    st.rerun()
 
 
 def render_specimen_measurements(

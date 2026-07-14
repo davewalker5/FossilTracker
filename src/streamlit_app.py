@@ -5,7 +5,7 @@ from __future__ import annotations
 import streamlit as st
 
 from fossil_tracker.config import APP_NAME, database_path
-from fossil_tracker.db import apply_migrations, get_specimen, list_specimens, seed_specimens
+from fossil_tracker.db import apply_migrations, get_specimen, list_specimens
 from ui.add_specimen import show_add_form
 from ui.documents import show_acquisition_documents
 from ui.edit_specimen import show_edit_form
@@ -77,9 +77,6 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Database")
         st.code(str(db_path), language=None)
-        if st.button("Add starter records", width="stretch"):
-            added = seed_specimens(db_path)
-            st.success(f"Added {added} starter record{'s' if added != 1 else ''}.")
 
     main_tab_labels = [
         "Search",

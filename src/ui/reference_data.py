@@ -158,9 +158,11 @@ def show_geological_age_manager(db_path: Path) -> None:
             key=f"age-min-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_age = save_col.form_submit_button("Save")
-        remove_age = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_age = clear_col.form_submit_button("Clear")
+        save_age = save_col.form_submit_button("Save", width="stretch")
+        remove_age = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_age = clear_col.form_submit_button("Clear", width="stretch")
 
     values = {
         "era": era,
@@ -254,9 +256,11 @@ def show_locality_manager(db_path: Path) -> None:
             key=f"locality-notes-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_locality = save_col.form_submit_button("Save")
-        remove_locality = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_locality = clear_col.form_submit_button("Clear")
+        save_locality = save_col.form_submit_button("Save", width="stretch")
+        remove_locality = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_locality = clear_col.form_submit_button("Clear", width="stretch")
 
     values = {
         "locality_name": locality_name,
@@ -316,9 +320,11 @@ def show_preparation_type_manager(db_path: Path) -> None:
             key=f"preparation-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_preparation = save_col.form_submit_button("Save")
-        remove_preparation = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_preparation = clear_col.form_submit_button("Clear")
+        save_preparation = save_col.form_submit_button("Save", width="stretch")
+        remove_preparation = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_preparation = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_preparation:
         _clear_selection(state_key)
@@ -380,9 +386,11 @@ def show_licence_manager(db_path: Path) -> None:
             key=f"licence-notes-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_licence = save_col.form_submit_button("Save")
-        remove_licence = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_licence = clear_col.form_submit_button("Clear")
+        save_licence = save_col.form_submit_button("Save", width="stretch")
+        remove_licence = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_licence = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_licence:
         _clear_selection(state_key)
@@ -441,9 +449,11 @@ def show_measurement_type_manager(db_path: Path) -> None:
             key=f"measurement-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_measurement_type = save_col.form_submit_button("Save")
-        remove_measurement_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_measurement_type = clear_col.form_submit_button("Clear")
+        save_measurement_type = save_col.form_submit_button("Save", width="stretch")
+        remove_measurement_type = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_measurement_type = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_measurement_type:
         _clear_selection(state_key)
@@ -506,9 +516,11 @@ def show_image_type_manager(db_path: Path) -> None:
             key=f"image-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_image_type = save_col.form_submit_button("Save")
-        remove_image_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_image_type = clear_col.form_submit_button("Clear")
+        save_image_type = save_col.form_submit_button("Save", width="stretch")
+        remove_image_type = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_image_type = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_image_type:
         _clear_selection(state_key)
@@ -567,9 +579,11 @@ def show_document_type_manager(db_path: Path) -> None:
             key=f"document-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_document_type = save_col.form_submit_button("Save")
-        remove_document_type = delete_col.form_submit_button("Delete", disabled=selected_row is None)
-        clear_document_type = clear_col.form_submit_button("Clear")
+        save_document_type = save_col.form_submit_button("Save", width="stretch")
+        remove_document_type = delete_col.form_submit_button(
+            "Delete", disabled=selected_row is None, width="stretch"
+        )
+        clear_document_type = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_document_type:
         _clear_selection(state_key)

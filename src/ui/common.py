@@ -628,7 +628,9 @@ def _render_selectable_reference_table(
         hide_index=True,
         disabled=[column for column in display_rows[0] if column != "Edit"],
         column_config={
-            "Edit": st.column_config.CheckboxColumn("Edit", width="small"),
+            "Edit": st.column_config.CheckboxColumn(
+                "", width=48, pinned=True, alignment="center"
+            ),
             **(column_config or {}),
         },
         key=f"{key}-{selected_id or 'new'}",

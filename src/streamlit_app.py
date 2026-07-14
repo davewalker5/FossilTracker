@@ -32,6 +32,30 @@ SPECIMEN_REQUIRED_TABS = {
 }
 
 
+def apply_compact_header_style() -> None:
+    """Reduce the Streamlit toolbar height while retaining its controls."""
+
+    st.markdown(
+        """
+        <style>
+            header[data-testid="stHeader"] {
+                height: 2.75rem;
+                min-height: 2.75rem;
+            }
+
+            div[data-testid="stToolbar"] {
+                height: 2.75rem;
+            }
+
+            div[data-testid="stMainBlockContainer"] {
+                padding-top: 3.5rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def selected_specimen_exists(db_path) -> bool:
     """Return whether the current session specimen id points to an existing specimen."""
 
@@ -65,6 +89,7 @@ def main() -> None:
     """Run the Streamlit application."""
 
     st.set_page_config(page_title=APP_NAME, layout="wide")
+    apply_compact_header_style()
     st.title(f"{APP_NAME} v{__version__}")
     st.caption("Personal fossil collection register")
 

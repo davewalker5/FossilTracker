@@ -127,12 +127,15 @@ def save_specimen_measurements(
     specimen_id: int,
     measurements: dict[int, str | None],
     db_path: Path | None = None,
+    *,
+    text_measurement_type_ids: frozenset[int] = frozenset(),
 ) -> None:
     """Atomically insert, update, or clear measurements for one specimen.
 
     :param specimen_id: Specimen primary key.
     :param measurements: Values keyed by measurement type id; ``None`` clears a value.
     :param db_path: Optional SQLite database path.
+    :param text_measurement_type_ids: Type ids whose values are categorical text.
     :return: None.
     """
 
@@ -142,7 +145,9 @@ def save_specimen_measurements(
         (
             specimen_id,
             measurement_type_id,
-            _rounded_measurement_value(value),
+            str(value).strip()
+            if measurement_type_id in text_measurement_type_ids
+            else _rounded_measurement_value(value),
             now,
             now,
         )

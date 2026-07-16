@@ -236,3 +236,20 @@ def test_render_specimen_markdown_resolves_default_image_folder(monkeypatch) -> 
     )
 
     assert '<img src="../images/FT-0001-hero.jpg" alt="Overall polished face">' in markdown
+
+
+def test_render_specimen_markdown_uses_cdn_url_for_images() -> None:
+    markdown = render_specimen_markdown(
+        SpecimenRecord.from_export(specimen_export()),
+        PROJECT_ROOT / "data" / "export" / "FT-0001.md",
+        "https://cdn.example.com/catalogue/",
+    )
+
+    assert (
+        '<img src="https://cdn.example.com/catalogue/images/FT-0001-hero.jpg" '
+        'alt="Overall polished face">'
+    ) in markdown
+    assert (
+        '<img src="https://cdn.example.com/catalogue/images/FT-0001-detail.jpg" '
+        'alt="Suture detail">'
+    ) in markdown

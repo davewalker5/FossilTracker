@@ -13,4 +13,9 @@ else
     INPUT_FILE="$PROJECT_ROOT/data/export/$1.json"
 fi
 
-python "$PROJECT_ROOT/src/render_specimen.py" --input "$INPUT_FILE"
+RENDER_ARGS=(--input "$INPUT_FILE")
+if [[ -n "$2" ]]; then
+    RENDER_ARGS+=(--cdn-url "$2")
+fi
+
+python "$PROJECT_ROOT/src/render_specimen.py" "${RENDER_ARGS[@]}"

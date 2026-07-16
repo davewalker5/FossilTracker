@@ -808,6 +808,25 @@ def test_save_specimen_measurements_inserts_and_updates_atomically(db_path: Path
     measurements = db.list_specimen_measurements(specimen_id, db_path)
     assert [row["measurement_name"] for row in measurements] == ["Shell Diameter (D)"]
 
+
+def test_save_specimen_measurements_accepts_explicit_categorical_text(db_path: Path) -> None:
+    specimen_id = db.create_specimen(
+        {"collection_code": "FT-3504", "title": "Orthocone"}, db_path
+    )
+    position_id = db.create_measurement_type(
+        {"name": "Siphuncle Position", "unit": "None"}, db_path
+    )
+
+    db.save_specimen_measurements(
+        specimen_id,
+        {position_id: "Central"},
+        db_path,
+        text_measurement_type_ids=frozenset({position_id}),
+    )
+
+    measurements = db.list_specimen_measurements(specimen_id, db_path)
+    assert measurements[0]["value"] == "Central"
+
 def test_create_acquisition_and_document_records(db_path: Path) -> None:
     receipt_type_id = db.create_document_type({"name": "Acquisition Receipt"}, db_path)
     paper_type_id = db.create_document_type({"name": "Scientific Paper"}, db_path)

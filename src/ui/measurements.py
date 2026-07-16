@@ -52,6 +52,7 @@ ORTHOCONE_DERIVED_TYPES = (
     "Chambers per cm",
 )
 SIPHUNCLE_POSITIONS = ("Central", "Subcentral", "Ventral", "Dorsal", "Unknown")
+TEXT_MEASUREMENT_TYPES = frozenset({"Siphuncle Position"})
 
 
 def calculate_ammonite_measurements(
@@ -514,4 +515,12 @@ def _save_named_measurements(
         else str(value)
         for name, value in values.items()
     }
-    save_specimen_measurements(specimen_id, formatted, db_path)
+    text_type_ids = frozenset(
+        type_ids[name] for name in values if name in TEXT_MEASUREMENT_TYPES
+    )
+    save_specimen_measurements(
+        specimen_id,
+        formatted,
+        db_path,
+        text_measurement_type_ids=text_type_ids,
+    )

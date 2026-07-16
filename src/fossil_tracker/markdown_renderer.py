@@ -81,11 +81,16 @@ class SpecimenRecord:
         return cls.from_export(json.loads(path.read_text(encoding="utf-8")))
 
 
-def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = None) -> str:
+def render_specimen_markdown(
+    record: SpecimenRecord,
+    output_path: Path | None = None,
+    cdn_url: str | None = None,
+) -> str:
     """Render a specimen record as GitHub/Pandoc-compatible Markdown.
 
     :param record: Normalized specimen record to render.
     :param output_path: Optional destination path used to make image paths relative.
+    :param cdn_url: Optional base URL from which images are served.
     :return: Rendered Markdown document text.
     """
 
@@ -99,13 +104,13 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
         section
         for section in [
             _section("specimen-overview", _overview(record)),
-            _primary_image(record, output_dir),
+            _primary_image(record, output_dir, cdn_url),
             _section("specimen-measurements", _measurements(record)),
             _section("specimen-identification", _identification(record)),
             _section("specimen-geology", _geological_context(record)),
             _section("specimen-observations", _observations(record)),
             _section("specimen-provenance", _provenance(record)),
-            _image_gallery(record, output_dir),
+            _image_gallery(record, output_dir, cdn_url),
             _section("specimen-related-links", _related_links(record)),
             _section("specimen-documents", _documents(record)),
             _section("specimen-metadata", _record_metadata(record)),
@@ -117,17 +122,24 @@ def render_specimen_markdown(record: SpecimenRecord, output_path: Path | None = 
     return f'<article class="specimen-record" markdown="1">\n\n{body}\n\n</article>\n'
 
 
-def render_specimen_file(input_path: Path, output_path: Path | None = None) -> Path:
+def render_specimen_file(
+    input_path: Path,
+    output_path: Path | None = None,
+    cdn_url: str | None = None,
+) -> Path:
     """Render one specimen JSON export to a Markdown file and return its path.
 
     :param input_path: Path to the specimen JSON export.
     :param output_path: Optional path for the generated Markdown file.
+    :param cdn_url: Optional base URL from which images are served.
     :return: Path to the written Markdown file.
     """
 
     record = SpecimenRecord.from_json_path(input_path)
     output = output_path or input_path.with_name(f"{_output_stem(record, input_path)}.md")
-    output.write_text(render_specimen_markdown(record, output), encoding="utf-8")
+    output.write_text(
+        render_specimen_markdown(record, output, cdn_url), encoding="utf-8"
+    )
     return output
 
 
@@ -291,17 +303,20 @@ def _overview(record: SpecimenRecord) -> str:
     return f"## Overview\n\n{description}"
 
 
-def _primary_image(record: SpecimenRecord, output_dir: Path | None) -> str:
+def _primary_image(
+    record: SpecimenRecord, output_dir: Path | None, cdn_url: str | None
+) -> str:
     """Render the first image as the primary image section.
 
     :param record: Specimen record containing image metadata.
     :param output_dir: Optional output directory used to make image paths relative.
+    :param cdn_url: Optional base URL from which images are served.
     :return: Markdown primary image section, or an empty string when unavailable.
     """
 
     if not record.images:
         return ""
-    image = _render_image(record.images[0], output_dir, is_primary=True)
+    image = _render_image(record.images[0], output_dir, cdn_url, is_primary=True)
     if not image:
         return ""
     return f"## Primary Image\n\n{image}"
@@ -438,15 +453,20 @@ def _provenance(record: SpecimenRecord) -> str:
     return "\n\n".join(parts)
 
 
-def _image_gallery(record: SpecimenRecord, output_dir: Path | None) -> str:
+def _image_gallery(
+    record: SpecimenRecord, output_dir: Path | None, cdn_url: str | None
+) -> str:
     """Render all non-primary images as a gallery section.
 
     :param record: Specimen record containing image metadata.
     :param output_dir: Optional output directory used to make image paths relative.
+    :param cdn_url: Optional base URL from which images are served.
     :return: Markdown image gallery section, or an empty string when absent.
     """
 
-    remaining = [_render_image(image, output_dir) for image in record.images[1:]]
+    remaining = [
+        _render_image(image, output_dir, cdn_url) for image in record.images[1:]
+    ]
     remaining = [image for image in remaining if image]
     if not remaining:
         return ""
@@ -518,6 +538,7 @@ def _record_metadata(record: SpecimenRecord) -> str:
 def _render_image(
     image: dict[str, Any],
     output_dir: Path | None,
+    cdn_url: str | None,
     *,
     is_primary: bool = False,
 ) -> str:
@@ -525,6 +546,7 @@ def _render_image(
 
     :param image: Image metadata dictionary from the export.
     :param output_dir: Optional output directory used to make the image path relative.
+    :param cdn_url: Optional base URL from which images are served.
     :param is_primary: When true, add the primary-image styling hook.
     :return: HTML figure block, or an empty string when no path exists.
     """
@@ -532,7 +554,7 @@ def _render_image(
     stored_path = _clean(image.get("image_path") or image.get("path"))
     if not stored_path:
         return ""
-    path = _markdown_image_path(stored_path, output_dir)
+    path = _markdown_image_path(stored_path, output_dir, cdn_url)
     caption = _clean(image.get("caption"))
     alt = caption or Path(stored_path).stem
     classes = "specimen-figure"
@@ -564,13 +586,19 @@ def _render_image(
     return "\n".join(parts)
 
 
-def _markdown_image_path(stored_path: str, output_dir: Path | None) -> str:
+def _markdown_image_path(
+    stored_path: str, output_dir: Path | None, cdn_url: str | None
+) -> str:
     """Resolve an exported image path for use in Markdown.
 
     :param stored_path: Image path stored in the specimen export.
     :param output_dir: Optional output directory used to make the path relative.
+    :param cdn_url: Optional base URL from which images are served.
     :return: POSIX-style path suitable for a Markdown image link.
     """
+
+    if cdn_url:
+        return f"{cdn_url.rstrip('/')}/images/{Path(stored_path).name}"
 
     if output_dir is None:
         return stored_path

@@ -15,12 +15,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("-i", "--input", type=Path, help="Specimen JSON file path")
     parser.add_argument("-o", "--output", type=Path, help="Markdown output path")
+    parser.add_argument(
+        "-cu", "--cdn-url", help="Base URL for the site serving specimen images"
+    )
     args = parser.parse_args(argv)
 
     if not args.input.exists():
         parser.error(f"Input file does not exist: {args.input}")
 
-    output_path = render_specimen_file(args.input, args.output)
+    output_path = render_specimen_file(args.input, args.output, args.cdn_url)
     print(output_path)
     return 0
 

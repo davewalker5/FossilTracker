@@ -15,6 +15,7 @@ from fossil_tracker.db import (
     update_related_link,
 )
 from ui.common import (
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     specimen_choice_index,
@@ -83,7 +84,7 @@ def show_related_links(db_path: Path) -> None:
             key=f"related-link-description-{editing_id or 'new'}",
         )
         save_col, clear_col = st.columns(2)
-        save_link = save_col.form_submit_button("Save", width="stretch")
+        save_link = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         clear_link = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_link:

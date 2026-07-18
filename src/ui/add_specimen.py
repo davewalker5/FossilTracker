@@ -7,7 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from fossil_tracker.db import create_specimen
-from ui.common import specimen_inputs
+from ui.common import is_read_only, specimen_inputs
 
 
 ADD_SPECIMEN_WIDGET_KEYS = [
@@ -38,7 +38,7 @@ def show_add_form(db_path: Path) -> None:
         st.success(success_message)
 
     values = specimen_inputs("new", db_path=db_path)
-    submitted = st.button("Add specimen")
+    submitted = st.button("Add specimen", disabled=is_read_only())
     if submitted:
         if not values["collection_code"] or not values["title"]:
             st.error("Collection code and title are required.")

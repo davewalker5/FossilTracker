@@ -17,6 +17,7 @@ from fossil_tracker.db import (
 )
 from ui.common import (
     CONFIDENCE_OPTIONS,
+    is_read_only,
     SOURCE_TYPE_OPTIONS,
     option_index,
     remember_default_specimen,
@@ -131,7 +132,9 @@ def show_provenance_manager(db_path: Path) -> None:
             value=data.get("notes", ""),
             key=f"provenance-notes-{widget_suffix}",
         )
-        save_acquisition = st.form_submit_button("Save provenance")
+        save_acquisition = st.form_submit_button(
+            "Save provenance", disabled=is_read_only()
+        )
 
     if save_acquisition:
         acquisition_date_text = (

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 import streamlit as st
 
 from fossil_tracker import __version__
-from fossil_tracker.config import APP_NAME, database_path
+from fossil_tracker.config import APP_NAME, database_path, is_read_only_host
 from fossil_tracker.db import apply_migrations, get_specimen, list_specimens
 from ui.add_specimen import show_add_form
 from ui.documents import show_acquisition_documents
@@ -131,6 +133,17 @@ def main() -> None:
     st.set_page_config(page_title=APP_NAME, layout="wide")
     apply_compact_header_style()
     st.title(f"{APP_NAME} v{__version__}")
+    try:
+        hostname = urlparse(st.context.url or "").hostname
+    except (AttributeError, RuntimeError):
+        hostname = None
+    read_only_mode = is_read_only_host(hostname)
+    st.session_state["read_only_mode"] = read_only_mode
+    if read_only_mode:
+        st.info(
+            "This deployment is demonstration read-only deployment. "
+            "Data maintenance and imports are disabled."
+        )
 
     db_path = database_path()
     try:

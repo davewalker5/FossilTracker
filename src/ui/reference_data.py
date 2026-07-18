@@ -39,6 +39,7 @@ from fossil_tracker.db import (
     update_preparation_type,
 )
 from ui.common import (
+    is_read_only,
     render_geological_age_table,
     render_licence_table,
     render_locality_table,
@@ -158,7 +159,7 @@ def show_geological_age_manager(db_path: Path) -> None:
             key=f"age-min-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_age = save_col.form_submit_button("Save", width="stretch")
+        save_age = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_age = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -256,7 +257,7 @@ def show_locality_manager(db_path: Path) -> None:
             key=f"locality-notes-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_locality = save_col.form_submit_button("Save", width="stretch")
+        save_locality = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_locality = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -320,7 +321,7 @@ def show_preparation_type_manager(db_path: Path) -> None:
             key=f"preparation-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_preparation = save_col.form_submit_button("Save", width="stretch")
+        save_preparation = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_preparation = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -386,7 +387,7 @@ def show_licence_manager(db_path: Path) -> None:
             key=f"licence-notes-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_licence = save_col.form_submit_button("Save", width="stretch")
+        save_licence = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_licence = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -449,7 +450,7 @@ def show_measurement_type_manager(db_path: Path) -> None:
             key=f"measurement-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_measurement_type = save_col.form_submit_button("Save", width="stretch")
+        save_measurement_type = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_measurement_type = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -516,7 +517,7 @@ def show_image_type_manager(db_path: Path) -> None:
             key=f"image-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_image_type = save_col.form_submit_button("Save", width="stretch")
+        save_image_type = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_image_type = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )
@@ -579,7 +580,7 @@ def show_document_type_manager(db_path: Path) -> None:
             key=f"document-type-description-{selected_id or 'new'}",
         )
         save_col, delete_col, clear_col = st.columns(3)
-        save_document_type = save_col.form_submit_button("Save", width="stretch")
+        save_document_type = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         remove_document_type = delete_col.form_submit_button(
             "Delete", disabled=selected_row is None, width="stretch"
         )

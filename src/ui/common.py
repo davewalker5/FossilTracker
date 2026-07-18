@@ -29,6 +29,12 @@ from fossil_tracker.db import (
     next_collection_code,
 )
 
+
+def is_read_only() -> bool:
+    """Return whether the current application session forbids data changes."""
+
+    return bool(st.session_state.get("read_only_mode", False))
+
 CONFIDENCE_OPTIONS = ["Unknown", "Low", "Medium", "High"]
 OBSERVATION_TYPE_OPTIONS = ["", "General", "Morphology", "Condition", "Measurement", "Research note", "Other"]
 SOURCE_TYPE_OPTIONS = ["", "Seller", "Collector", "Gift", "Field collection", "Auction", "Unknown", "Other"]

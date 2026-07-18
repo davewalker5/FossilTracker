@@ -17,6 +17,7 @@ from fossil_tracker.db import (
 )
 from ui.common import (
     CONFIDENCE_OPTIONS,
+    is_read_only,
     option_index,
     remember_default_specimen,
     remember_selected_specimen,
@@ -115,9 +116,11 @@ def show_taxonomy_manager(db_path: Path) -> None:
             key=f"specimen-taxonomy-notes-{suffix}",
         )
         save_col, delete_col = st.columns([1, 1])
-        save_taxonomy = save_col.form_submit_button("Save taxonomy", width="stretch")
+        save_taxonomy = save_col.form_submit_button(
+            "Save taxonomy", disabled=is_read_only(), width="stretch"
+        )
         remove_taxonomy = delete_col.form_submit_button(
-            "Delete taxonomy", disabled=taxonomy is None, width="stretch"
+            "Delete taxonomy", disabled=taxonomy is None or is_read_only(), width="stretch"
         )
 
     values = {

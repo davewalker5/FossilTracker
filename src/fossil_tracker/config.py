@@ -14,6 +14,7 @@ DEFAULT_IMAGE_DIR = DEFAULT_DATA_DIR / "images"
 DEFAULT_DOCUMENT_DIR = DEFAULT_DATA_DIR / "documents"
 DEFAULT_EXPORT_DIR = DEFAULT_DATA_DIR / "export"
 MIGRATIONS_PATH = PROJECT_ROOT / "migrations"
+DEFAULT_READ_ONLY_DOMAINS = ("streamlit.app",)
 
 
 def database_path() -> Path:
@@ -50,6 +51,25 @@ def export_dir() -> Path:
     """
 
     return _configured_path("FOSSIL_TRACKER_EXPORT", DEFAULT_EXPORT_DIR)
+
+
+def read_only_domains() -> tuple[str, ...]:
+    """Return domain suffixes that should run the application read-only.
+
+    Set ``FOSSIL_TRACKER_READ_ONLY_DOMAINS`` to a comma-separated list to
+    replace the defaults. A blank value retains the default list.
+    """
+
+    configured = os.environ.get("FOSSIL_TRACKER_READ_ONLY_DOMAINS", "")
+    domains = configured.split(",") if configured.strip() else DEFAULT_READ_ONLY_DOMAINS
+    return tuple(domain.strip().lower().lstrip(".") for domain in domains if domain.strip())
+
+
+def is_read_only_host(hostname: str | None) -> bool:
+    """Return whether *hostname* matches a configured read-only domain suffix."""
+
+    host = (hostname or "").split(":", 1)[0].strip().lower().rstrip(".")
+    return any(host == domain or host.endswith(f".{domain}") for domain in read_only_domains())
 
 
 def _configured_path(environment_variable: str, default_path: Path) -> Path:

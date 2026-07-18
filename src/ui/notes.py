@@ -16,6 +16,7 @@ from fossil_tracker.db import (
 )
 from ui.common import (
     OBSERVATION_TYPE_OPTIONS,
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     render_specimen_observations,
@@ -118,7 +119,7 @@ def show_observation_notes(db_path: Path) -> None:
         )
         action_col, clear_col = st.columns(2)
         save_observation = action_col.form_submit_button(
-            "Save" if selected_observation else "Add", width="stretch"
+            "Save" if selected_observation else "Add", disabled=is_read_only(), width="stretch"
         )
         clear_observation = clear_col.form_submit_button("Clear", width="stretch")
 

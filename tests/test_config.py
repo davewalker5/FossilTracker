@@ -11,7 +11,27 @@ from fossil_tracker.config import (
     document_dir,
     export_dir,
     image_dir,
+    is_read_only_host,
+    read_only_domains,
 )
+
+
+def test_read_only_domains_default_to_streamlit(monkeypatch) -> None:
+    monkeypatch.delenv("FOSSIL_TRACKER_READ_ONLY_DOMAINS", raising=False)
+
+    assert read_only_domains() == ("streamlit.app",)
+    assert is_read_only_host("fossil-tracker.streamlit.app")
+    assert not is_read_only_host("streamlit.app.example.com")
+
+
+def test_read_only_domains_are_configurable(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "FOSSIL_TRACKER_READ_ONLY_DOMAINS", " demo.example.org, catalogue.test "
+    )
+
+    assert read_only_domains() == ("demo.example.org", "catalogue.test")
+    assert is_read_only_host("www.demo.example.org:443")
+    assert not is_read_only_host("fossil-tracker.streamlit.app")
 
 
 def test_database_path_defaults_to_project_data_path(monkeypatch) -> None:

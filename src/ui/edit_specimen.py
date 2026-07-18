@@ -8,6 +8,7 @@ import streamlit as st
 
 from fossil_tracker.db import delete_specimen, get_specimen, list_specimens, update_specimen
 from ui.common import (
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     specimen_choice_index,
@@ -50,9 +51,15 @@ def show_edit_form(db_path: Path) -> None:
 
     values = specimen_inputs("edit", specimen, db_path)
     left, middle, right = st.columns([1, 1, 1])
-    save = left.button("Save changes", width="stretch", on_click=stay_on_edit_tab)
-    export = middle.button("Export", width="stretch", on_click=stay_on_edit_tab)
-    remove = right.button("Delete specimen", width="stretch", on_click=stay_on_edit_tab)
+    save = left.button(
+        "Save changes", width="stretch", on_click=stay_on_edit_tab, disabled=is_read_only()
+    )
+    export = middle.button(
+        "Export", width="stretch", on_click=stay_on_edit_tab, disabled=is_read_only()
+    )
+    remove = right.button(
+        "Delete specimen", width="stretch", on_click=stay_on_edit_tab, disabled=is_read_only()
+    )
 
     if save:
         if not values["collection_code"] or not values["title"]:

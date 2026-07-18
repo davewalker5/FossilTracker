@@ -18,6 +18,7 @@ from fossil_tracker.db import (
 )
 from ui.common import (
     delete_managed_document_file,
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     save_uploaded_document,
@@ -98,7 +99,7 @@ def show_acquisition_documents(db_path: Path) -> None:
     ):
         uploaded = None
         if selected_document is None:
-            uploaded = st.file_uploader("Upload document")
+            uploaded = st.file_uploader("Upload document", disabled=is_read_only())
         document_meta = st.columns([1, 1])
         document_type = document_meta[0].selectbox(
             "Document type",
@@ -121,7 +122,7 @@ def show_acquisition_documents(db_path: Path) -> None:
             key=f"document-notes-{form_suffix}",
         )
         save_col, clear_col = st.columns(2)
-        save_document = save_col.form_submit_button("Save", width="stretch")
+        save_document = save_col.form_submit_button("Save", disabled=is_read_only(), width="stretch")
         clear_document = clear_col.form_submit_button("Clear", width="stretch")
 
     if clear_document:

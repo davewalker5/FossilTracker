@@ -17,6 +17,7 @@ from fossil_tracker.db import (
     update_specimen_image,
 )
 from ui.common import (
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     render_specimen_images,
@@ -124,7 +125,10 @@ def show_images_and_notes(db_path: Path) -> None:
     with st.form(f"image-form-{form_suffix}", clear_on_submit=selected_image is None):
         uploaded = None
         if selected_image is None:
-            uploaded = st.file_uploader("Upload image", type=["jpg", "jpeg", "png", "webp", "gif"])
+            uploaded = st.file_uploader(
+                "Upload image", type=["jpg", "jpeg", "png", "webp", "gif"],
+                disabled=is_read_only(),
+            )
         image_meta = st.columns([1, 1, 1, 1])
         image_type = image_meta[0].selectbox(
             "Image type",
@@ -170,7 +174,7 @@ def show_images_and_notes(db_path: Path) -> None:
         )
         action_col, cancel_col = st.columns([1, 1])
         save_image = action_col.form_submit_button(
-            "Save image details" if selected_image else "Add image"
+            "Save image details" if selected_image else "Add image", disabled=is_read_only()
         )
         cancel_edit = cancel_col.form_submit_button(
             "Cancel editing", disabled=selected_image is None

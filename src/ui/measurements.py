@@ -19,6 +19,7 @@ from fossil_tracker.db import (
     update_specimen_measurement,
 )
 from ui.common import (
+    is_read_only,
     remember_default_specimen,
     remember_selected_specimen,
     render_specimen_measurements,
@@ -202,7 +203,7 @@ def _show_standard_measurements(specimen_id: int, db_path: Path) -> None:
         )
         action_col, clear_col = st.columns(2)
         submitted = action_col.form_submit_button(
-            "Save" if selected_measurement else "Add", width="stretch"
+            "Save" if selected_measurement else "Add", disabled=is_read_only(), width="stretch"
         )
         clear_measurement = clear_col.form_submit_button("Clear", width="stretch")
 
@@ -275,7 +276,7 @@ def _show_ammonite_measurements(specimen_id: int, db_path: Path) -> None:
             "Whorl Width (Ww) in mm", min_value=0.0,
             value=_current_float(existing, AMMONITE_SOURCE_TYPES[3]),
         )
-        submitted = st.form_submit_button("Save")
+        submitted = st.form_submit_button("Save", disabled=is_read_only())
     if not submitted:
         return
     if diameter <= 0 or height <= 0:
@@ -347,7 +348,7 @@ def _show_orthocone_measurements(specimen_id: int, db_path: Path) -> None:
             "Siphuncle Diameter in mm (optional)",
             value=existing.get("Siphuncle Diameter", ""),
         )
-        submitted = st.form_submit_button("Save")
+        submitted = st.form_submit_button("Save", disabled=is_read_only())
 
     # Show calculated values from the current form state as an immediate reference.
     calculated = None

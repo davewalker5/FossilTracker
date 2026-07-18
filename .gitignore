@@ -141,4 +141,4 @@ cython_debug/
 .vscode/
 .idea/
 proto/
-data/
+data/export/
